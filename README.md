@@ -70,6 +70,31 @@ Columns:    open, high, low, close, volume, amount, turnover
 - akshare：0.5s/次（服务器 IP 可能被限，建议用 tushare）
 - tushare 免费版：2s/次（上限 50次/分钟）
 
+## 实验日志
+
+长时间 GP 实验的日志自动保存到 `results/logs/`，按实验 ID 归档：
+
+```text
+results/logs/
+└── exp_20240115_143022/
+    ├── run.log        # 完整文本日志，同时输出到终端
+    └── stats.jsonl    # 每代进化指标（每行一个 JSON）
+```
+
+不进 tmux 也能查看进度：
+
+```bash
+tail -f results/logs/exp_<id>/run.log
+```
+
+在 notebook 里分析实验曲线：
+
+```python
+from utils.logger import load_stats
+stats = load_stats("results/logs/exp_20240115_143022")
+# stats 是 list[dict]，每代一条：gen, best_ic, mean_ic, best_expr, ts
+```
+
 ## 项目结构
 
 ```text
@@ -77,11 +102,14 @@ src/
 ├── data/          # 数据获取与处理
 ├── gp/            # GP 进化引擎（算子、表达式树、主循环）
 ├── evaluation/    # 因子评估（IC、ICIR、分组收益）
-└── backtest/      # 分组回测
+├── backtest/      # 分组回测
+└── utils/
+    └── logger.py  # 实验日志模块
 
 configs/           # 实验配置（YAML）
 scripts/           # 运行脚本
 notebooks/         # 实验笔记
+results/logs/      # 实验日志（不入库）
 ```
 
 ## 进度
@@ -91,5 +119,6 @@ notebooks/         # 实验笔记
 - [x] 因子评估指标（IC、ICIR、分组收益）
 - [x] 简单分组回测
 - [x] A 股数据接口对接（akshare / tushare，断点续传）
+- [x] 实验日志模块
 - [ ] 适应度函数实现
 - [ ] 首次进化实验
