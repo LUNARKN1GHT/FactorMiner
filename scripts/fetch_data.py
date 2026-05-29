@@ -22,7 +22,7 @@ def main() -> None:
     parser.add_argument("--universe", default="hs300", help="股票池 (hs300/zz500/sz50)")
     parser.add_argument("--start", default="2018-01-01", help="开始日期 YYYY-MM-DD")
     parser.add_argument("--end", default="2023-12-31", help="结束日期 YYYY-MM-DD")
-    parser.add_argument("--interval", type=float, default=0.3, help="请求间隔（秒）")
+    parser.add_argument("--interval", type=float, default=None, help="请求间隔（秒），默认由数据源决定")
     args = parser.parse_args()
 
     print(f"获取 {args.universe} 成分股...")
