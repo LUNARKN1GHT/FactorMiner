@@ -19,12 +19,56 @@
 # 安装依赖
 pip install -r requirements.txt
 
-# 运行 GP 因子挖掘（待数据对接后可用）
-python scripts/run_gp.py
+# 配置数据源（首次使用）
+cp .env.example .env   # 编辑填入 TUSHARE_TOKEN
 
-# 指定配置
+# 下载行情数据（首次运行，约 10 分钟）
+python scripts/fetch_data.py --universe hs300 --start 2018-01-01 --end 2024-12-31
+
+# 运行 GP 因子挖掘
 python scripts/run_gp.py configs/default.yaml
 ```
+
+## 数据管理
+
+### 数据源
+
+通过项目根目录 `.env` 文件切换数据源：
+
+| 数据源  | 说明                             | 配置                                             |
+| ------- | -------------------------------- | ------------------------------------------------ |
+| akshare | 免费无需注册，部分服务器网络受限 | `DATA_SOURCE=akshare`                            |
+| tushare | 稳定，需注册获取 token           | `DATA_SOURCE=tushare` `TUSHARE_TOKEN=your_token` |
+
+tushare token 在 [tushare.pro](https://tushare.pro) 注册后个人中心获取。
+
+### 缓存结构
+
+数据以 Parquet 格式缓存，**逐股存储，支持断点续传**，中途中断重新运行自动跳过已下载的：
+
+```text
+data/cache/
+├── universe_hs300.txt               # 成分股列表（7天TTL自动刷新）
+└── stocks/
+    ├── akshare/
+    │   └── 000001_2018-01-01_2024-12-31.parquet
+    └── tushare/
+        └── 000001_2018-01-01_2024-12-31.parquet
+```
+
+### 数据格式
+
+`load_daily_prices()` 返回前复权日频数据：
+
+```txt
+MultiIndex: (date: Timestamp, code: str)
+Columns:    open, high, low, close, volume, amount, turnover
+```
+
+### 限速说明
+
+- akshare：0.5s/次（服务器 IP 可能被限，建议用 tushare）
+- tushare 免费版：2s/次（上限 50次/分钟）
 
 ## 项目结构
 
@@ -46,6 +90,6 @@ notebooks/         # 实验笔记
 - [x] GP 引擎核心实现（表达式树、遗传操作、进化主循环）
 - [x] 因子评估指标（IC、ICIR、分组收益）
 - [x] 简单分组回测
-- [ ] A 股数据接口对接
+- [x] A 股数据接口对接（akshare / tushare，断点续传）
 - [ ] 适应度函数实现
 - [ ] 首次进化实验
