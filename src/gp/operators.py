@@ -19,9 +19,10 @@ def mul(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 
 
 def protected_div(x: np.ndarray, y: np.ndarray) -> np.ndarray:
-    with np.errstate(divide="ignore", invalid="ignore"):
-        result = np.where(np.abs(y) > 1e-10, x / y, 0.0)
-    return result
+    # 除法本身按格子对齐即可；唯一要防的是除零产生的 inf
+    out = x / y
+    # 把 ±inf 替换成 0；真正的 NaN（停牌/缺失）保留，交给后面 IC 计算时过滤
+    return out.replace([np.inf, -np.inf], 0.0)
 
 
 # ---- 一元算子 ----
@@ -36,14 +37,16 @@ def abs_op(x: np.ndarray) -> np.ndarray:
 
 
 def log_op(x: np.ndarray) -> np.ndarray:
-    with np.errstate(divide="ignore", invalid="ignore"):
-        return np.where(x > 1e-10, np.log(x), 0.0)
+    # 只对正数取 log；非正数先置 NaN（log 无定义），结果自然是 NaN
+    # 不要像原来那样用 np.where —— 它会把 DataFrame 退化成 ndarray，丢掉行列索引
+    return np.log(x.where(x > 1e-10))  # type: ignore
 
 
 def rank(x: np.ndarray) -> np.ndarray:
-    """截面排名，归一化到 [0, 1]。"""
-    s = pd.Series(x)
-    return s.rank(pct=True).values
+    """截面排名"""
+    # 截面排名：关键是 axis=1 —— 对「每一行(每一天)」内部、跨股票排名
+    # 原来的 pd.Series(x).rank() 把整张表拉平排名，是错的
+    return x.rank(axis=1, pct=True)  # type: ignore
 
 
 # ---- 时序算子 ----

@@ -36,14 +36,26 @@ def random_terminal() -> Node:
 
 # ---- 随机树生成 ----
 
+TS_OP_NAMES = set(TS_OPS)
+
 
 def random_tree(max_depth: int, min_depth: int = 0) -> Node:
     """Grow 方法生成随机表达式树。"""
+
+    # 迭代出口，处理掉异常情况
     if max_depth <= 0 or (max_depth <= min_depth and random.random() < 0.5):
         return random_terminal()
 
+    # 定义所有操作的集合
     all_ops = list(BINARY_OPS.items()) + list(UNARY_OPS.items()) + list(TS_OPS.items())
     op_name, (_, arity) = random.choice(all_ops)
+
+    if op_name in TS_OP_NAMES:
+        # 时序算子：树上只有一个字节点，窗口长度存进 value
+        child = random_tree(max_depth - 1, min_depth - 1)
+        return Node(name=op_name, arity=1, children=[child], value=random.choice(TS_WINDOWS))
+
+    # 算术（二元）/一元/截面算子：通常按arity生成子树
     children = [random_tree(max_depth - 1, min_depth - 1) for _ in range(arity)]
     return Node(name=op_name, arity=arity, children=children)
 

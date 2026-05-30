@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "factorminer"
+version = "0.1.0"
+description = "A 股遗传规划因子挖掘实验"
+requires-python = ">=3.11"
+# 依赖仍由 requirements.txt 管理，这里不重复声明
+
+# 告诉 setuptools：把 src 及其子包都当作可导入的包
+# （它们都已有 __init__.py，find 会自动发现 src / src.gp / src.data ...）
+[tool.setuptools.packages.find]
+include = ["src*"]
