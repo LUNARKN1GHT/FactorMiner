@@ -1,5 +1,6 @@
 """GP 因子挖掘主入口脚本。"""
 
+import pickle
 import sys
 
 import pandas as pd
@@ -41,6 +42,11 @@ def main(config_path: str = "configs/default.yaml"):
     logger.info("=== Top 10 因子 ===")
     for tree, score in results[:10]:
         logger.info("|ICIR|=%.4f  %s", score, tree)
+
+    # 持久化存储因子
+    with open(log_dir / "top_factors.pkl", "wb") as fh:
+        pickle.dump(results, fh)
+    logger.info("Top 因子已存: %s", log_dir / "top_factors.pkl")
 
 
 if __name__ == "__main__":
