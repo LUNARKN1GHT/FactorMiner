@@ -65,11 +65,10 @@ def ts_std(x: pd.Series, window: int) -> pd.Series:
 def ts_rank(x: pd.Series, window: int) -> pd.Series:
     """滚动排名（当前值在窗口中的分位数）。"""
 
-    def _rank_pct(arr):
-        s = pd.Series(arr)
-        return s.rank(pct=True).iloc[-1]
+    def _last_rank(arr):
+        return (arr <= arr[-1]).mean()
 
-    return x.rolling(window, min_periods=1).apply(_rank_pct, raw=False)
+    return x.rolling(window, min_periods=1).apply(_last_rank, raw=False)
 
 
 def delay(x: pd.Series, period: int) -> pd.Series:

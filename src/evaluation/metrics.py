@@ -48,10 +48,17 @@ def calc_ic_series(
         return_df: 同结构的未来收益矩阵。
     """
     dates = factor_df.index.intersection(return_df.index)
-    ic_list = {}
-    for date in dates:
-        ic_list[date] = calc_ic(factor_df.loc[date], return_df.loc[date], method)
-    return pd.Series(ic_list)
+    f = factor_df.loc[dates]
+    r = return_df.loc[dates]
+
+    if method == "rank":
+        f = f.rank(axis=1)  # 每天跨股票排名 → Spearman
+        r = r.rank(axis=1)
+
+    ic = f.corrwith(r, axis=1)  # 按行一次算完所有天
+    valid = (f.notna() & r.notna()).sum(axis=1)
+    ic[valid < 10] = np.nan  # 保留「每天≥10 只」门槛
+    return ic
 
 
 def calc_icir(ic_series: pd.Series) -> float:
