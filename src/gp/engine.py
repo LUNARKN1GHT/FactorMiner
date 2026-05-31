@@ -10,6 +10,7 @@ import numpy as np
 
 from src.gp.operators import BINARY_OPS, TS_OPS, UNARY_OPS
 from src.gp.tree import Node, collect_nodes
+from src.utils.logger import log_generation
 
 
 @dataclass
@@ -109,12 +110,16 @@ def mutate(individual: Node, max_depth: int = 3) -> Node:
 def run_gp(
     fitness_fn,
     config: GPConfig | None = None,
+    logger=None,
+    log_dir=None,
 ) -> list[tuple[Node, float]]:
     """GP 进化主循环。
 
     Args:
         fitness_fn: 适应度函数，接收 Node 返回 float（越大越好）。
         config: GP 超参数配置。
+        logger: 实验日志，None 时退回 print
+        log_dif: 实验目录
 
     Returns:
         按适应度降序排列的 (个体, 适应度) 列表。
@@ -133,10 +138,23 @@ def run_gp(
 
         best_idx = np.argmax(fitnesses)
         best_history.append((copy.deepcopy(population[best_idx]), fitnesses[best_idx]))
-        print(
+
+        msg = (
             f"Gen {gen:3d} | best={fitnesses[best_idx]:.4f} "
             f"| mean={fitnesses.mean():.4f} | expr={population[best_idx]}"
         )
+        logger.info(msg) if logger is not None else print(msg)
+
+        # 结构化记录这一代，供事后分析（best_ic/mean_ic 字段这里装的是 |ICIR| 适应度）
+        if log_dir is not None:
+            log_generation(
+                log_dir,
+                gen=gen,
+                best_ic=float(fitnesses[best_idx]),
+                mean_ic=float(fitnesses.mean()),
+                best_expr=str(population[best_idx]),
+                extra={"metric": "abs_icir", "pop_size": config.population_size},
+            )
 
         next_pop = [copy.deepcopy(population[best_idx])]  # 精英保留
 

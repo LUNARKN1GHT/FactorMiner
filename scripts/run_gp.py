@@ -9,6 +9,7 @@ from src.data.preprocess import to_panel
 from src.evaluation.fitness import make_fitness
 from src.gp.engine import GPConfig, run_gp
 from src.gp.evaluator import to_wide
+from src.utils.logger import setup_experiment_logger
 
 
 def main(config_path: str = "configs/default.yaml"):
@@ -18,10 +19,13 @@ def main(config_path: str = "configs/default.yaml"):
     gp_cfg = GPConfig(**cfg["gp"])
     dcfg, ecfg = cfg["data"], cfg["evaluation"]
 
+    logger, log_dir = setup_experiment_logger()
+    logger.info("配置文件: %s", config_path)
+
     # 1. 读已清晰的面板数据
     clean_path = dcfg.get("clean_path", "data/cache/prices_clean.parquet")
     prices = pd.read_parquet(clean_path)
-    print(f"载入 {clean_path}: shape={prices.shape}, 列={list(prices.columns)}")
+    logger.info("载入 %s: shape=%s, 列=%s", clean_path, prices.shape, list(prices.columns))
     if "fwd_ret" not in prices.columns:
         raise KeyError("prices_clean 缺少 fwd_ret 列，先运行 preprocess_data.py")
 
@@ -34,9 +38,9 @@ def main(config_path: str = "configs/default.yaml"):
     results = run_gp(fitness_fn=fitness_fn, config=gp_cfg)
 
     # 4. 打印 Top 因子
-    print("\n === Top 10 因子 ===")
+    logger.info("=== Top 10 因子 ===")
     for tree, score in results[:10]:
-        print(f"|ICIR| = {score:.4f} {tree}")
+        logger.info("|ICIR|=%.4f  %s", score, tree)
 
 
 if __name__ == "__main__":
