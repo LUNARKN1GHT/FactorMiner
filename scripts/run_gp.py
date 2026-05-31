@@ -4,9 +4,10 @@ import sys
 
 import yaml
 
-sys.path.insert(0, ".")
-
-from src.gp.engine import GPConfig
+from src.data.loader import load_daily_prices, load_universe_cached
+from src.evaluation.fitness import compute_forward_returns, make_fitness
+from src.gp.engine import GPConfig, run_gp
+from src.gp.evaluator import to_wide
 
 
 def main(config_path: str = "configs/default.yaml"):
@@ -14,18 +15,28 @@ def main(config_path: str = "configs/default.yaml"):
         cfg = yaml.safe_load(f)
 
     gp_cfg = GPConfig(**cfg["gp"])
+    dcfg, ecfg, bcfg = cfg["data"], cfg["evaluation"], cfg["backtest"]
 
-    # TODO: 加载真实数据，构建适应度函数
-    # data = load_daily_prices(...)
-    # def fitness_fn(tree): ...
-
-    print("GP 因子挖掘引擎已就绪。")
-    print(
-        f"配置: population={gp_cfg.population_size}, "
-        f"generations={gp_cfg.generations}, "
-        f"max_depth={gp_cfg.max_depth}"
+    # 1. 加载行情 —> 转宽表
+    codes = load_universe_cached(dcfg["universe"])
+    prices = load_daily_prices(
+        codes=codes, start_date=dcfg["start_date"], end_date=dcfg["end_date"]
     )
-    print("等待数据接口对接后启动进化...")
+    wide = to_wide(prices=prices)
+
+    # 2. 未来收益
+    fwd = compute_forward_returns(wide["close"], period=bcfg["holding_period"])
+
+    # 3. 适应度函数
+    fitness_fn = make_fitness(wide=wide, forward_returns=fwd, method=ecfg["ic_method"])
+
+    # 4. 开始进化
+    results = run_gp(fitness_fn=fitness_fn, config=gp_cfg)
+
+    # 5. 打印 Top 因子
+    print("\n === Top 10 因子 ===")
+    for tree, score in results[:10]:
+        print(f"|ICIR| = {score:.4f} {tree}")
 
 
 if __name__ == "__main__":

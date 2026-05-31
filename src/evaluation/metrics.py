@@ -24,6 +24,10 @@ def calc_ic(
     if len(fv) < 10:
         return np.nan
 
+    # 截面退化：因子或收益在该日是常数 -> 相关系数无定义，直接判 NaN
+    if fv.nunique() <= 1 or fr.nunique() <= 1:
+        return np.nan
+
     if method == "rank":
         corr, _ = stats.spearmanr(fv, fr)
     else:
