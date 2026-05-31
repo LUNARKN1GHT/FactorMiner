@@ -2,10 +2,11 @@
 
 import sys
 
+import pandas as pd
 import yaml
 
-from src.data.loader import load_daily_prices, load_universe_cached
-from src.evaluation.fitness import compute_forward_returns, make_fitness
+from src.data.preprocess import to_panel
+from src.evaluation.fitness import make_fitness
 from src.gp.engine import GPConfig, run_gp
 from src.gp.evaluator import to_wide
 
@@ -15,25 +16,24 @@ def main(config_path: str = "configs/default.yaml"):
         cfg = yaml.safe_load(f)
 
     gp_cfg = GPConfig(**cfg["gp"])
-    dcfg, ecfg, bcfg = cfg["data"], cfg["evaluation"], cfg["backtest"]
+    dcfg, ecfg = cfg["data"], cfg["evaluation"]
 
-    # 1. 加载行情 —> 转宽表
-    codes = load_universe_cached(dcfg["universe"])
-    prices = load_daily_prices(
-        codes=codes, start_date=dcfg["start_date"], end_date=dcfg["end_date"]
-    )
-    wide = to_wide(prices=prices)
+    # 1. 读已清晰的面板数据
+    clean_path = dcfg.get("clean_path", "data/cache/prices_clean.parquet")
+    prices = pd.read_parquet(clean_path)
+    print(f"载入 {clean_path}: shape={prices.shape}, 列={list(prices.columns)}")
+    if "fwd_ret" not in prices.columns:
+        raise KeyError("prices_clean 缺少 fwd_ret 列，先运行 preprocess_data.py")
 
-    # 2. 未来收益
-    fwd = compute_forward_returns(wide["close"], period=bcfg["holding_period"])
+    # 2. 价格字段 -> 宽表字典
+    wide = to_wide(prices=prices.drop(columns=["fwd_ret"]))  # 去掉 fwd_ret，避免被当成特征
+    fwd = to_panel(prices, "fwd_ret")  # 未来收益
 
     # 3. 适应度函数
     fitness_fn = make_fitness(wide=wide, forward_returns=fwd, method=ecfg["ic_method"])
-
-    # 4. 开始进化
     results = run_gp(fitness_fn=fitness_fn, config=gp_cfg)
 
-    # 5. 打印 Top 因子
+    # 4. 打印 Top 因子
     print("\n === Top 10 因子 ===")
     for tree, score in results[:10]:
         print(f"|ICIR| = {score:.4f} {tree}")
