@@ -36,7 +36,7 @@ def main(config_path: str = "configs/default.yaml"):
 
     # 3. 适应度函数
     fitness_fn = make_fitness(wide=wide, forward_returns=fwd, method=ecfg["ic_method"])
-    results = run_gp(fitness_fn=fitness_fn, config=gp_cfg)
+    results = run_gp(fitness_fn=fitness_fn, config=gp_cfg, logger=logger, log_dir=log_dir)
 
     # 4. 打印 Top 因子
     logger.info("=== Top 10 因子 ===")
