@@ -40,6 +40,10 @@ def random_terminal() -> Node:
 TS_OP_NAMES = set(TS_OPS)
 
 
+def _within_limit(node: Node, max_depth: int) -> bool:
+    return node.depth() <= max_depth
+
+
 def random_tree(max_depth: int, min_depth: int = 0) -> Node:
     """Grow 方法生成随机表达式树。"""
 
@@ -163,11 +167,15 @@ def run_gp(
                 p1 = tournament_select(population, fitnesses, config.tournament_size)
                 p2 = tournament_select(population, fitnesses, config.tournament_size)
                 c1, c2 = crossover(p1, p2)
+                # 深度门禁：超限的后代直接丢弃
+                c1 = c1 if _within_limit(c1, config.max_depth) else p1
+                c2 = c2 if _within_limit(c2, config.max_depth) else p2
                 next_pop.extend([c1, c2])
             else:
                 p = tournament_select(population, fitnesses, config.tournament_size)
                 if random.random() < config.mutation_prob:
-                    p = mutate(p, max_depth=3)
+                    m = mutate(p, max_depth=3)
+                    p = m if _within_limit(m, config.max_depth) else p
                 next_pop.append(p)
 
         population = next_pop[: config.population_size]
