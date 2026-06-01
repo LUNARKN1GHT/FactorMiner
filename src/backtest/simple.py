@@ -46,6 +46,9 @@ def run_backtest(
         short_ret = r.reindex(short_codes).mean()
         gross = long_ret - short_ret
 
+        if np.isnan(gross):  # 末尾几期 fwd_ret 全 NaN → 不是真实持有期，跳过
+            continue
+
         # 换手率
         turn = _turnover(prev_long, long_codes) + _turnover(prev_short, short_codes)
         cost = turn * commission * 2
