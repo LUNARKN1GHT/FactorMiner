@@ -35,7 +35,12 @@ def main(config_path: str = "configs/default.yaml"):
     fwd = to_panel(prices, "fwd_ret")  # 未来收益
 
     # 3. 适应度函数
-    fitness_fn = make_fitness(wide=wide, forward_returns=fwd, method=ecfg["ic_method"])
+    fitness_fn = make_fitness(
+        wide=wide,
+        forward_returns=fwd,
+        method=ecfg["ic_method"],
+        parsimony=ecfg.get("parsimony", 0.0),
+    )
     results = run_gp(fitness_fn=fitness_fn, config=gp_cfg, logger=logger, log_dir=log_dir)
 
     # 4. 打印 Top 因子

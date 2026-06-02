@@ -23,13 +23,16 @@ def compute_forward_returns(close: pd.DataFrame, period: int = 5) -> pd.DataFram
     return close.pct_change(period).shift(-period)
 
 
-def make_fitness(wide: pd.DataFrame, forward_returns, method="rank") -> float:
-    """构造适应度函数：表达式树 → 适应度分数（这里用 |ICIR|）。
+def make_fitness(
+    wide: pd.DataFrame, forward_returns, method="rank", parsimony: float = 0.0
+) -> float:
+    """构造适应度函数：|ICIR| 减去简约惩罚。
 
     Args:
         wide (_type_): _description_
         forward_returns (_type_): _description_
         method (str, optional): _description_. Defaults to "rank".
+        parsimony (float): 每个节点的惩罚系数
 
     Returns:
         float: _description_
@@ -49,6 +52,7 @@ def make_fitness(wide: pd.DataFrame, forward_returns, method="rank") -> float:
         if not np.isfinite(icir):
             return -1.0
 
-        return abs(icir)
+        # 简约压力：树越大，惩罚越多
+        return abs(icir) - parsimony * node.size()
 
     return fitness  # type: ignore

@@ -17,6 +17,7 @@ data:
 evaluation:
   ic_method: "rank"  # rank IC (Spearman)
   n_groups: 5        # 分组回测的组数
+  parsimony: 0.002 # 简约惩罚系数
 
 backtest:
   holding_period: 5  # 持仓天数
