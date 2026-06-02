@@ -48,7 +48,7 @@ def random_tree(max_depth: int, min_depth: int = 0) -> Node:
     """Grow 方法生成随机表达式树。"""
 
     # 迭代出口，处理掉异常情况
-    if max_depth <= 0 or (max_depth <= min_depth and random.random() < 0.5):
+    if max_depth <= 0 or (min_depth <= 0 and random.random() < 0.5):
         return random_terminal()
 
     # 定义所有操作的集合
@@ -131,9 +131,7 @@ def run_gp(
     if config is None:
         config = GPConfig()
 
-    population = [
-        random_tree(config.max_depth, config.min_depth) for _ in range(config.population_size)
-    ]
+    population = ramped_half_and_half(config.population_size, config.min_depth, config.max_depth)
 
     best_history = []
 
@@ -182,3 +180,49 @@ def run_gp(
 
     results = sorted(best_history, key=lambda x: x[1], reverse=True)
     return results
+
+
+def full_tree(max_depth: int) -> Node:
+    """全量方法：每个分支都要长到 max_depth 才收口
+
+    Args:
+        max_depth (int): 最大深度
+
+    Returns:
+        Node: 生成的最大树
+    """
+    if max_depth <= 0:
+        return random_terminal()
+
+    all_ops = list(BINARY_OPS.items()) + list(UNARY_OPS.items()) + list(TS_OPS.items())
+    op_name, (_, arity) = random.choice(all_ops)
+
+    if op_name in TS_OP_NAMES:
+        # 时序算子：窗口存 value，挂一个子树
+        child = full_tree(max_depth - 1)
+        return Node(name=op_name, arity=1, children=[child], value=random.choice(TS_WINDOWS))
+
+    children = [full_tree(max_depth - 1) for _ in range(arity)]
+    return Node(name=op_name, arity=arity, children=children)
+
+
+def ramped_half_and_half(pop_size: int, min_depth: int, max_depth: int) -> list[Node]:
+    """Koza 标准初始化
+
+    Args:
+        pop_size (int): _description_
+        min_depth (int): _description_
+        max_depth (int): _description_
+
+    Returns:
+        list[None]: _description_
+    """
+    population: list[Node] = []
+    depths = list(range(min_depth, max_depth + 1))  # 深度阶梯
+
+    for i in range(pop_size):
+        depth = depths[i % len(depths)]  # 轮流覆盖每个深度档
+        # 一半 full（满树），一半 grow（形状不规则、深度≤depth）
+        tree = full_tree(depth) if i % 2 == 0 else random_tree(depth, min_depth=1)
+        population.append(tree)
+    return population
