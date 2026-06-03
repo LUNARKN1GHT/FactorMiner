@@ -5,6 +5,7 @@
 最后跨折汇总「每折按训练段最强挑出的因子」的样本外战绩，看它稳不稳。
 """
 
+import pickle
 import statistics
 import sys
 from collections.abc import Callable
@@ -70,7 +71,7 @@ def main(config_path: str = "configs/default.yaml") -> None:
     gp_cfg = GPConfig(**cfg["gp"])
     method = cfg["evaluation"]["ic_method"]
 
-    logger, _ = setup_experiment_logger()
+    logger, log_dir = setup_experiment_logger()
 
     prices = pd.read_parquet(cfg["data"].get("clean_path", "data/cache/prices_clean.parquet"))
     wide = to_wide(prices.drop(columns=["fwd_ret"]))
@@ -84,6 +85,7 @@ def main(config_path: str = "configs/default.yaml") -> None:
     )
 
     picks: list = []  # 每折「按 train|ICIR| 最强挑出的因子」的战绩，留作跨折汇总
+    fold_results: list = []  # 每折完整记录（窗口 + 整条前沿的逐个体战绩），落盘备查
 
     for fold, (train_lo, split, test_hi) in enumerate(windows, start=1):
         # 滚动窗的训练段要同时卡上下界（半开）；holdout 只卡上界，这里多了 >= train_lo
@@ -107,6 +109,7 @@ def main(config_path: str = "configs/default.yaml") -> None:
         logger.info("%4s %11s %10s %6s  expr", "size", "train|ICIR|", "test|ICIR|", "衰减")
         # best 末尾多存两个「带符号」ICIR：abs 会把符号翻转藏掉，汇总时用它判断方向稳不稳
         best: tuple[int, float, float, float, Node, float, float] | None = None
+        rows = []  # 本折每个体的战绩，连同表达式树一起落盘，省得日后想复看又重跑
         for tree, _, size in pareto:
             ic = calc_ic_series(evaluate(tree, wide), fwd, method=method)
             icir_tr = calc_icir(ic.loc[(ic.index >= train_lo) & (ic.index < split)].dropna())
@@ -114,11 +117,31 @@ def main(config_path: str = "configs/default.yaml") -> None:
             tr, te = abs(icir_tr), abs(icir_te)
             decay = (1 - te / tr) * 100 if tr else 0.0
             logger.info("%4d %11.4f %10.4f %5.0f%%  %s", size, tr, te, decay, tree)
+            rows.append(
+                {
+                    "size": size,
+                    "expr": str(tree),
+                    "tree": tree,
+                    "train_icir": icir_tr,
+                    "test_icir": icir_te,
+                    "decay": decay,
+                }
+            )
             if best is None or tr > best[1]:
                 best = (size, tr, te, decay, tree, icir_tr, icir_te)
 
         if best is not None:
             picks.append((fold, *best))
+        fold_results.append(
+            {
+                "fold": fold,
+                "train_lo": train_lo,
+                "split": split,
+                "test_hi": test_hi,
+                "n_train": len(fwd_train),
+                "rows": rows,
+            }
+        )
 
     # 跨折汇总：模拟「每折都挑当折样本内最强因子」后，样本外到底稳不稳
     logger.info("")
@@ -140,6 +163,13 @@ def main(config_path: str = "configs/default.yaml") -> None:
         statistics.pstdev(te_list),
         min(te_list),
     )
+
+    # 落盘：窗口 + 每折完整前沿（含表达式树，可日后重新评估）+ 跨折选中因子
+    payload = {"config_path": config_path, "folds": fold_results, "picks": picks}
+    out_path = log_dir / "walkforward.pkl"
+    with open(out_path, "wb") as fh:
+        pickle.dump(payload, fh)
+    logger.info("结果已落盘：%s", out_path)
 
 
 if __name__ == "__main__":
