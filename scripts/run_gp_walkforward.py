@@ -5,6 +5,7 @@
 最后跨折汇总「每折按训练段最强挑出的因子」的样本外战绩，看它稳不稳。
 """
 
+import statistics
 import sys
 from collections.abc import Callable
 
@@ -50,7 +51,7 @@ def make_objective(
     既避免「循环里定义闭包捕获循环变量」的坑，也和 fitness.make_fitness 同一套路。
     """
 
-    def objective_fn(tree):
+    def objective_fn(tree: Node) -> float | None:
         try:
             ic = calc_ic_series(evaluate(tree, wide), fwd_train, method=method).dropna()
         except Exception:
@@ -104,15 +105,17 @@ def main(config_path: str = "configs/default.yaml") -> None:
 
         # 逐个体检：同一因子在本折 train / test 两段的 |ICIR|
         logger.info("%4s %11s %10s %6s  expr", "size", "train|ICIR|", "test|ICIR|", "衰减")
-        best: tuple[int, float, float, float, Node] | None = None
+        # best 末尾多存两个「带符号」ICIR：abs 会把符号翻转藏掉，汇总时用它判断方向稳不稳
+        best: tuple[int, float, float, float, Node, float, float] | None = None
         for tree, _, size in pareto:
             ic = calc_ic_series(evaluate(tree, wide), fwd, method=method)
-            tr = abs(calc_icir(ic.loc[(ic.index >= train_lo) & (ic.index < split)].dropna()))
-            te = abs(calc_icir(ic.loc[(ic.index >= split) & (ic.index < test_hi)].dropna()))
+            icir_tr = calc_icir(ic.loc[(ic.index >= train_lo) & (ic.index < split)].dropna())
+            icir_te = calc_icir(ic.loc[(ic.index >= split) & (ic.index < test_hi)].dropna())
+            tr, te = abs(icir_tr), abs(icir_te)
             decay = (1 - te / tr) * 100 if tr else 0.0
             logger.info("%4d %11.4f %10.4f %5.0f%%  %s", size, tr, te, decay, tree)
             if best is None or tr > best[1]:
-                best = (size, tr, te, decay, tree)
+                best = (size, tr, te, decay, tree, icir_tr, icir_te)
 
         if best is not None:
             picks.append((fold, *best))
@@ -120,15 +123,22 @@ def main(config_path: str = "configs/default.yaml") -> None:
     # 跨折汇总：模拟「每折都挑当折样本内最强因子」后，样本外到底稳不稳
     logger.info("")
     logger.info("=== 跨折汇总：每折按 train|ICIR| 选出的因子，其样本外战绩 ===")
-    logger.info("%4s %4s %11s %10s %6s  expr", "fold", "size", "train|ICIR|", "test|ICIR|", "衰减")
-    for fold, size, tr, te, decay, tree in picks:
-        logger.info("%4d %4d %11.4f %10.4f %5.0f%%  %s", fold, size, tr, te, decay, tree)
+    logger.info("%4s %4s %12s %12s %6s  expr", "fold", "size", "train ICIR", "test ICIR", "衰减")
+    for fold, size, _, _, decay, tree, icir_tr, icir_te in picks:
+        # 带符号显示：±号直接看出方向；训练/测试符号相反 = 因子预测反了（比衰减更糟）
+        flip = " ⚠符号翻转" if icir_tr * icir_te < 0 else ""
+        logger.info(
+            "%4d %4d %+12.4f %+12.4f %5.0f%%  %s%s", fold, size, icir_tr, icir_te, decay, tree, flip
+        )
 
-    te_list = [te for *_, te, _, _ in picks]
+    # 均值会把「碰运气灵一折」和「三折都灵」抹平，所以同时报离散度（标准差 / 最差折）
+    te_list = [float(p[3]) for p in picks]  # p[3] = 该折 test|ICIR|（绝对值）
     logger.info(
-        "OOS |ICIR| 各折=%s | 均值=%.4f",
+        "OOS |ICIR| 各折=%s | 均值=%.4f 标准差=%.4f 最差=%.4f",
         [round(x, 4) for x in te_list],
-        sum(te_list) / len(te_list),
+        statistics.mean(te_list),
+        statistics.pstdev(te_list),
+        min(te_list),
     )
 
 
