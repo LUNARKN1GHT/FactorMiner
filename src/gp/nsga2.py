@@ -207,6 +207,16 @@ def run_gp_nsga2(
         r = pop + offspring
         r_objs = objs + _eval_objs(offspring, objective_fn)
 
+        # 基因型去重：同一个表达式只保留一份
+        uniq: dict = {}
+        for (
+            t,
+            o,
+        ) in zip(r, r_objs, strict=False):
+            uniq.setdefault(str(t), (t, o))
+        r = [t for t, _ in uniq.values()]
+        r_objs = [o for _, o in uniq.values()]
+
         # 3. 环境选择：按层装，最后一层用拥挤度补满
         chosen: list[int] = []
         for front in non_dominated_sort(r_objs):
@@ -249,7 +259,14 @@ def run_gp_nsga2(
                 },
             )
 
-    # 返回最终 Pareto 前沿
-    pareto = [(pop[i], objs[i][0], int(-objs[i][1])) for i in non_dominated_sort(objs)[0]]
+    # 返回最终 Pareto 前沿，同时保证打印不重复
+    seen: set = set()
+    pareto: list = []
+    for i in non_dominated_sort(objs)[0]:
+        key = str(pop[i])
+        if key in seen:
+            continue
+        seen.add(key)
+        pareto.append((pop[i], objs[i][0], int(-objs[i][1])))
     pareto.sort(key=lambda x: x[2])
     return pareto
