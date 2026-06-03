@@ -68,7 +68,7 @@ def ts_rank(x: pd.Series, window: int) -> pd.Series:
     def _last_rank(arr):
         return (arr <= arr[-1]).mean()
 
-    return x.rolling(window, min_periods=1).apply(_last_rank, raw=False)
+    return x.rolling(window, min_periods=1).apply(_last_rank, raw=True)
 
 
 def delay(x: pd.Series, period: int) -> pd.Series:
