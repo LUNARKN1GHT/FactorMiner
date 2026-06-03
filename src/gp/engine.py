@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import copy
+import logging
 import random
+from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
@@ -56,7 +59,7 @@ def random_tree(max_depth: int, min_depth: int = 0) -> Node:
     op_name, (_, arity) = random.choice(all_ops)
 
     if op_name in TS_OP_NAMES:
-        # 时序算子：树上只有一个字节点，窗口长度存进 value
+        # 时序算子：树上只有一个子节点，窗口长度存进 value
         child = random_tree(max_depth - 1, min_depth - 1)
         return Node(name=op_name, arity=1, children=[child], value=random.choice(TS_WINDOWS))
 
@@ -69,6 +72,16 @@ def random_tree(max_depth: int, min_depth: int = 0) -> Node:
 
 
 def tournament_select(population: list[Node], fitnesses: np.ndarray, k: int) -> Node:
+    """锦标赛选择节点
+
+    Args:
+        population (list[Node]): 生成的树
+        fitnesses (np.ndarray): 适应度列表
+        k (int): 选择的数量
+
+    Returns:
+        Node: _description_
+    """
     indices = random.sample(range(len(population)), k)
     best = max(indices, key=lambda i: fitnesses[i])
     return copy.deepcopy(population[best])
@@ -112,10 +125,10 @@ def mutate(individual: Node, max_depth: int = 3) -> Node:
 
 
 def run_gp(
-    fitness_fn,
+    fitness_fn: Callable[[Node], float],
     config: GPConfig | None = None,
-    logger=None,
-    log_dir=None,
+    logger: logging.Logger | None = None,
+    log_dir: Path | None = None,
 ) -> list[tuple[Node, float]]:
     """GP 进化主循环。
 
@@ -123,7 +136,7 @@ def run_gp(
         fitness_fn: 适应度函数，接收 Node 返回 float（越大越好）。
         config: GP 超参数配置。
         logger: 实验日志，None 时退回 print
-        log_dif: 实验目录
+        log_dir: 实验目录
 
     Returns:
         按适应度降序排列的 (个体, 适应度) 列表。
@@ -210,9 +223,9 @@ def ramped_half_and_half(pop_size: int, min_depth: int, max_depth: int) -> list[
     """Koza 标准初始化
 
     Args:
-        pop_size (int): _description_
-        min_depth (int): _description_
-        max_depth (int): _description_
+        pop_size (int): 头部的数量
+        min_depth (int): 最小深度限制
+        max_depth (int): 最大深度吸纳之
 
     Returns:
         list[None]: _description_

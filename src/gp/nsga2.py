@@ -141,7 +141,7 @@ def crowding_distance(front: list[int], objs: list[Objective]) -> dict[int, floa
     Returns:
         {个体下标: 拥挤度}；边界个体为 inf（必保留以撑开前沿）。
     """
-    dist: dict = {i: 0.0 for i in front}
+    dist: dict[int, float] = {i: 0.0 for i in front}
     if len(front) <= 2:
         # 太少，全给无穷大
         return {i: float("inf") for i in front}
@@ -186,7 +186,7 @@ def run_gp_nsga2(
         rank, crowd = _rank_and_crowd(objs)
 
         # 1. 生成子代 Q
-        offspring: list = []
+        offspring: list[Node] = []
         while len(offspring) < config.population_size:
             i = _tournament(rank, crowd, config.tournament_size)
             if random.random() < config.crossover_prob:
@@ -208,7 +208,7 @@ def run_gp_nsga2(
         r_objs = objs + _eval_objs(offspring, objective_fn)
 
         # 3. 环境选择：按层装，最后一层用拥挤度补满
-        chosen: list = []
+        chosen: list[int] = []
         for front in non_dominated_sort(r_objs):
             if len(chosen) + len(front) <= config.population_size:
                 chosen.extend(front)

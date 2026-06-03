@@ -15,7 +15,7 @@ def run_backtest(
 
     Args:
         factor_df: index=date, columns=code 的因子值矩阵。
-        return_df: 同结构的未来收益矩阵。
+        fwd_ret: 同结构的未来收益矩阵。
         fwd_red: 前向收益率表
         holding_period: 持仓周期长度
         n_groups: 分组数。
@@ -57,6 +57,8 @@ def run_backtest(
         records.append({"date": d, "gross": gross, "net": net, "turnover": turn})
         prev_long, prev_short = long_codes, short_codes
 
+    if not records:
+        raise ValueError("没有有效调仓日，检查 factor / fwd_ret 是否对齐")
     bt = pd.DataFrame(records).set_index("date")
     equity = (1 + bt["net"]).cumprod()  # 不重叠的复利才合法
     ppy = 252 / holding_period
@@ -72,7 +74,7 @@ def run_backtest(
     }
 
 
-def _turnover(prev: set, cur: set) -> float:
+def _turnover(prev: set[str], cur: set[str]) -> float:
     """新一期持仓里，有多少比例是新换进来的（单腿、单向）。"""
     if not cur:
         return 0.0

@@ -1,10 +1,13 @@
 """适应度分析：今天的因子值，是否能预测未来的收益"""
 
+from collections.abc import Callable
+
 import numpy as np
 import pandas as pd
 
 from src.evaluation.metrics import calc_ic_series, calc_icir
 from src.gp.evaluator import evaluate
+from src.gp.tree import Node
 
 
 def compute_forward_returns(close: pd.DataFrame, period: int = 5) -> pd.DataFrame:
@@ -24,21 +27,24 @@ def compute_forward_returns(close: pd.DataFrame, period: int = 5) -> pd.DataFram
 
 
 def make_fitness(
-    wide: pd.DataFrame, forward_returns, method="rank", parsimony: float = 0.0
-) -> float:
+    wide: dict[str, pd.DataFrame],
+    forward_returns: pd.DataFrame,
+    method: str = "rank",
+    parsimony: float = 0.0,
+) -> Callable[[Node], float]:
     """构造适应度函数：|ICIR| 减去简约惩罚。
 
     Args:
-        wide (_type_): _description_
-        forward_returns (_type_): _description_
-        method (str, optional): _description_. Defaults to "rank".
+        wide (dict[str, pd.DataFrame]): 数据宽表
+        forward_returns (_type_): 前向收益率宽表
+        method (str, optional): 相关性计算方式. Defaults to "rank".
         parsimony (float): 每个节点的惩罚系数
 
     Returns:
         float: _description_
     """
 
-    def fitness(node) -> float:
+    def fitness(node: Node) -> float:
         try:
             factor = evaluate(node=node, wide=wide)
         except Exception:
