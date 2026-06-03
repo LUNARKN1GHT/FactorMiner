@@ -41,7 +41,7 @@ def summarize(name: str, rule: Rule, folds: list[dict]) -> None:
     """对一种选法：逐折打印选中因子的战绩，并报 OOS |ICIR| 的均值/标准差/最差。"""
     print(f"\n=== 选法：{name} ===")
     print(f"{'fold':>4} {'size':>4} {'train ICIR':>12} {'test ICIR':>12} {'衰减':>6}  expr")
-    oos = []  # 各折选中因子的 test|ICIR|（绝对值），用来算汇总离散度
+    oos: list = []  # 各折选中因子的 test|ICIR|（绝对值），用来算汇总离散度
     for fold in folds:
         pick = rule(fold["rows"])
         # 带符号打印方向，符号相反则标翻转——和 walk-forward 汇总同一套口径
@@ -51,7 +51,7 @@ def summarize(name: str, rule: Rule, folds: list[dict]) -> None:
             f"{pick['train_icir']:>+12.4f} {pick['test_icir']:>+12.4f} "
             f"{pick['decay']:>5.0f}%  {pick['expr']}{flip}"
         )
-        oos.append(abs(pick["test_icir"]))
+        oos.append(float(abs(pick["test_icir"])))
     print(
         f"OOS |ICIR| 各折={[round(x, 4) for x in oos]} | "
         f"均值={statistics.mean(oos):.4f} 标准差={statistics.pstdev(oos):.4f} 最差={min(oos):.4f}"
