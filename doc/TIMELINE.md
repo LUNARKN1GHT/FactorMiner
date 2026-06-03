@@ -3,8 +3,11 @@
 ## 2026-06-03
 
 - **NSGA-II 多目标 GP**：实现多目标遗传规划 [`nsga2.py`](../src/gp/nsga2.py)，并配套入口脚本 [`run_gp_nsga2.py`](../scripts/run_gp_nsga2.py)。（在 `develop` 分支开发，待合并入 `main`）
+- **训练窗口分割**：实现训练窗口分割 [`run_gp_walkforward.py`](../scripts/run_gp_walkforward.py)。直接完成实验脚本，
 - **代码完善**：补充变量声明与 docstring，完善 `engine` / `fitness` / `operators` / `evaluator` 等函数定义。
 - **笔记/实验**：更新优化模块笔记 [`优化模块.md`](./优化模块.md)，并在 [`05_gp_modules.ipynb`](../notebooks/05_gp_modules.ipynb) 中记录新实验。
+- **问题**：
+  - 在全量数据集上运行效率较低，参数优化还需要考虑。窗口过多可能也是导致计算速率下降的原因。
 
 ## 2026-06-02
 
