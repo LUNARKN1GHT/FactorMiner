@@ -13,7 +13,7 @@ from src.gp.evaluator import to_wide
 from src.utils.logger import setup_experiment_logger
 
 
-def main(config_path: str = "configs/default.yaml"):
+def main(config_path: str = "configs/default.yaml") -> None:
     with open(config_path) as f:
         cfg = yaml.safe_load(f)
 

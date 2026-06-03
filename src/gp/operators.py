@@ -6,19 +6,19 @@ import pandas as pd
 # ---- 二元算子 ----
 
 
-def add(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+def add(x: pd.DataFrame, y: pd.DataFrame) -> pd.DataFrame:
     return x + y
 
 
-def sub(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+def sub(x: pd.DataFrame, y: pd.DataFrame) -> pd.DataFrame:
     return x - y
 
 
-def mul(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+def mul(x: pd.DataFrame, y: pd.DataFrame) -> pd.DataFrame:
     return x * y
 
 
-def protected_div(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+def protected_div(x: pd.DataFrame, y: pd.DataFrame) -> pd.DataFrame:
     # 除法本身按格子对齐即可；唯一要防的是除零产生的 inf
     out = x / y
     # 把 ±inf 替换成 0；真正的 NaN（停牌/缺失）保留，交给后面 IC 计算时过滤
@@ -28,55 +28,55 @@ def protected_div(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 # ---- 一元算子 ----
 
 
-def neg(x: np.ndarray) -> np.ndarray:
+def neg(x: pd.DataFrame) -> pd.DataFrame:
     return -x
 
 
-def abs_op(x: np.ndarray) -> np.ndarray:
+def abs_op(x: pd.DataFrame) -> pd.DataFrame:
     return np.abs(x)
 
 
-def log_op(x: np.ndarray) -> np.ndarray:
+def log_op(x: pd.DataFrame) -> pd.DataFrame:
     # 只对正数取 log；非正数先置 NaN（log 无定义），结果自然是 NaN
     # 不要像原来那样用 np.where —— 它会把 DataFrame 退化成 ndarray，丢掉行列索引
     return np.log(x.where(x > 1e-10))  # type: ignore
 
 
-def rank(x: np.ndarray) -> np.ndarray:
+def rank(x: pd.DataFrame) -> pd.DataFrame:
     """截面排名"""
     # 截面排名：关键是 axis=1 —— 对「每一行(每一天)」内部、跨股票排名
-    # 原来的 pd.Series(x).rank() 把整张表拉平排名，是错的
+    # 原来的 pd.DataFrame(x).rank() 把整张表拉平排名，是错的
     return x.rank(axis=1, pct=True)  # type: ignore
 
 
 # ---- 时序算子 ----
 
 
-def ts_mean(x: pd.Series, window: int) -> pd.Series:
+def ts_mean(x: pd.DataFrame, window: int) -> pd.DataFrame:
     """滚动均值。"""
     return x.rolling(window, min_periods=1).mean()
 
 
-def ts_std(x: pd.Series, window: int) -> pd.Series:
+def ts_std(x: pd.DataFrame, window: int) -> pd.DataFrame:
     """滚动标准差。"""
     return x.rolling(window, min_periods=1).std().fillna(0)
 
 
-def ts_rank(x: pd.Series, window: int) -> pd.Series:
+def ts_rank(x: pd.DataFrame, window: int) -> pd.DataFrame:
     """滚动排名（当前值在窗口中的分位数）。"""
 
     def _last_rank(arr):
         return (arr <= arr[-1]).mean()
 
-    return x.rolling(window, min_periods=1).apply(_last_rank, raw=False)
+    return x.rolling(window, min_periods=1).apply(_last_rank, raw=True)
 
 
-def delay(x: pd.Series, period: int) -> pd.Series:
+def delay(x: pd.DataFrame, period: int) -> pd.DataFrame:
     """时序延迟。"""
     return x.shift(period)
 
 
-def delta(x: pd.Series, period: int) -> pd.Series:
+def delta(x: pd.DataFrame, period: int) -> pd.DataFrame:
     """时序差分。"""
     return x - x.shift(period)
 

@@ -7,7 +7,7 @@ from src.gp.tree import Node
 
 
 def to_wide(prices: pd.DataFrame) -> dict[str, pd.DataFrame]:
-    """把 loader 的长表 (MultiIndex date, code) 拆成功 「字段 -> 宽表」字典。
+    """把 loader 的长表 (MultiIndex date, code) 拆成 「字段 -> 宽表」字典。
 
     每张宽表: index=date, columns=code.
     这样后面所有算子都在统一形态的宽表上运算。
