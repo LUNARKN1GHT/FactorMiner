@@ -22,6 +22,9 @@ class Node:
     value: Any = None
     """叶节点的常量值或特征名"""
 
+    out_type: str = "S"
+    """改节点输出的类型：S=带量纲序列，R=截面排名。STGP 用它约束生成/交叉/变异"""
+
     @property
     def is_leaf(self) -> bool:
         """判断该节点是否为叶子节点"""

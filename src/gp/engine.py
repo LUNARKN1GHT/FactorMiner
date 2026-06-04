@@ -26,6 +26,9 @@ class GPConfig:
     max_depth: int = 6
     min_depth: int = 2
 
+    strongly_typed: bool = False
+    """开启强类型 GP： 用 stgp 的类型化生成/急哦啊差/变异，只产生合法因子"""
+
 
 # ---- 终端集（叶节点） ----
 

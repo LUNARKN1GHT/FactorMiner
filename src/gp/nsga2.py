@@ -179,7 +179,19 @@ def run_gp_nsga2(
     """
     config = config or GPConfig()
 
-    pop = ramped_half_and_half(config.population_size, config.min_depth, config.max_depth)
+    # 强类型开关：选类型化 / 普通三件套
+    if config.strongly_typed:
+        from src.gp.stgp import typed_crossover, typed_mutate, typed_ramped_half_and_half
+
+        init_fn, crossover_fn, mutate_fn = (
+            typed_ramped_half_and_half,
+            typed_crossover,
+            typed_mutate,
+        )
+    else:
+        init_fn, crossover_fn, mutate_fn = ramped_half_and_half, crossover, mutate
+
+    pop = init_fn(config.population_size, config.min_depth, config.max_depth)
     objs = _eval_objs(pop, objective_fn)
 
     for gen in range(config.generations):
@@ -191,14 +203,14 @@ def run_gp_nsga2(
             i = _tournament(rank, crowd, config.tournament_size)
             if random.random() < config.crossover_prob:
                 j = _tournament(rank, crowd, config.tournament_size)
-                for c in crossover(pop[i], pop[j]):
+                for c in crossover_fn(pop[i], pop[j]):
                     offspring.append(
                         c if _within_limit(c, config.max_depth) else copy.deepcopy(pop[i])
                     )
             else:
                 c = copy.deepcopy(pop[i])
                 if random.random() < config.mutation_prob:
-                    m = mutate(c, max_depth=3)
+                    m = mutate_fn(c, max_depth=3)
                     c = m if _within_limit(m, config.max_depth) else c
                 offspring.append(c)
         offspring = offspring[: config.population_size]
