@@ -11,12 +11,16 @@ from src.gp.engine import GPConfig
 from src.gp.evaluator import evaluate, to_wide
 from src.gp.nsga2 import run_gp_nsga2
 from src.gp.stgp import recompute_type
+from src.utils.logger import setup_experiment_logger
 
 
 def main(config_path: str = "configs/smoke.yaml") -> None:
     with open(config_path) as f:
         cfg = yaml.safe_load(f)
     method = cfg["evaluation"]["ic_method"]
+
+    logger, log_dir = setup_experiment_logger()
+    logger.info("STGP smoke | 配置：%s", config_path)
 
     prices = pd.read_parquet(cfg["data"].get("clean_path", "data/cache/prices_clean.parquet"))
     wide = to_wide(prices.drop(columns=["fwd_ret"]))
@@ -32,20 +36,20 @@ def main(config_path: str = "configs/smoke.yaml") -> None:
         icir = calc_icir(ic)
         return abs(icir) if pd.notna(icir) else None
 
-    # gp 块由 smoke.yaml 驱动（含 strongly_typed: true）
+    # gp 块由 smoke.yaml 驱动（含 strongly_typed: true）；logger/log_dir 传进去，每代日志落 run.log
     gp_cfg = GPConfig(**cfg["gp"])
-    pareto = run_gp_nsga2(objective_fn, gp_cfg)
+    pareto = run_gp_nsga2(objective_fn, gp_cfg, logger, log_dir)
 
-    print(f"=== STGP Pareto 前沿（{len(pareto)} 个）===")
+    logger.info("=== STGP Pareto 前沿（%d 个）===", len(pareto))
     bad = 0
     for tree, icir, size in pareto:
         try:
             recompute_type(tree)  # 抽查：进化产物是否仍类型合法
         except AssertionError as exc:
             bad += 1
-            print("非法：", exc)
-        print(f"[{tree.out_type}] |ICIR|={icir:.4f} size={size:2d}  {tree}")
-    print(f"非法 {bad} 例")
+            logger.info("非法：%s", exc)
+        logger.info("[%s] |ICIR|=%.4f size=%2d  %s", tree.out_type, icir, size, tree)
+    logger.info("非法 %d 例", bad)
 
 
 if __name__ == "__main__":
