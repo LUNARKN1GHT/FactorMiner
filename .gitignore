@@ -32,3 +32,6 @@ Thumbs.db
 
 # Env
 .env
+
+# VSCodeCounter
+.VSCodeCounter/
