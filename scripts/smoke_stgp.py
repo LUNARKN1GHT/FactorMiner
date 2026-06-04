@@ -1,5 +1,6 @@
 """STGP 接入 NSGA 的小种群 smoke：跑通 + 抽查 Pareto 因子全部类型合法。"""
 
+import pickle
 import sys
 
 import pandas as pd
@@ -50,6 +51,10 @@ def main(config_path: str = "configs/smoke.yaml") -> None:
             logger.info("非法：%s", exc)
         logger.info("[%s] |ICIR|=%.4f size=%2d  %s", tree.out_type, icir, size, tree)
     logger.info("非法 %d 例", bad)
+
+    with open(log_dir / "pareto_front.pkl", "wb") as fh:
+        pickle.dump(pareto, fh)
+    logger.info("Pareto 前沿已存：%s", log_dir / "pareto_front.pkl")
 
 
 if __name__ == "__main__":
