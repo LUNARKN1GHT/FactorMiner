@@ -1,5 +1,13 @@
 # TIMELINE
 
+## 2026-06-04
+
+- **walk-forward 全量结果**：滚动窗三折跑通，整条前沿连表达式树落盘 `walkforward.pkl`，后续分析不重跑 GP。结论：因子方向稳但强度不稳（OOS \|ICIR\| 均值 0.14、标准差 0.10），幸存者清一色量/额类。
+- **选择准则对比**：新增 [`compare_selection.py`](../scripts/compare_selection.py)，离线对比 train-max / min-size / parsimony——证明瓶颈不在选法，在搜出来的因子本就弱；顺带解开「负衰减」之谜（n=3 时一折 regime 运气主导汇总）。
+- **显著性校正**：新增 [`significance.py`](../scripts/significance.py)（Newey-West 修单因子重叠，naive→NW 约 1.8× haircut）与 [`deflated.py`](../scripts/deflated.py)（Deflated Sharpe，break-even N\* 判活）。结论：**三折无一经得起重叠 + 选择偏差双重校正**。
+- **笔记**：样本外验证完整结论写入 [`验证模块.md`](./验证模块.md)。
+- （均在 `develop` 分支开发，待合并入 `main`）
+
 ## 2026-06-03
 
 - **NSGA-II 多目标 GP**：实现多目标遗传规划 [`nsga2.py`](../src/gp/nsga2.py)，并配套入口脚本 [`run_gp_nsga2.py`](../scripts/run_gp_nsga2.py)。（在 `develop` 分支开发，待合并入 `main`）
