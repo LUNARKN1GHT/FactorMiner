@@ -20,7 +20,9 @@ def main(config_path: str = "configs/default.yaml") -> None:
     gp_cfg = GPConfig(**cfg["gp"])
     dcfg, ecfg = cfg["data"], cfg["evaluation"]
 
-    logger, log_dir = setup_experiment_logger()
+    logger, log_dir = setup_experiment_logger(
+        tag="Simple_gp", meta={"config": config_path, "gp": cfg["gp"]}
+    )
     logger.info("配置文件: %s", config_path)
 
     # 1. 读已清晰的面板数据

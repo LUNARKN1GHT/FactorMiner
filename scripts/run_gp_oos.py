@@ -19,7 +19,9 @@ def main(config_path: str = "configs/default.yaml", split: str = "2022-01-01") -
     gp_cfg = GPConfig(**cfg["gp"])
     method = cfg["evaluation"]["ic_method"]
 
-    logger, log_dir = setup_experiment_logger()
+    logger, log_dir = setup_experiment_logger(
+        tag="oos", meta={"config": config_path, "gp": cfg["gp"]}
+    )
 
     prices = pd.read_parquet(cfg["data"].get("clean_path", "data/cache/prices_clean.parquet"))
     wide = to_wide(prices.drop(columns=["fwd_ret"]))

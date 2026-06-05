@@ -22,7 +22,9 @@ def main(config_path: str = "configs/default.yaml") -> None:
     gp_cfg = GPConfig(**cfg["gp"])
     dcfg = cfg["data"]
 
-    logger, log_dir = setup_experiment_logger()
+    logger, log_dir = setup_experiment_logger(
+        tag="nsga2", meta={"config": config_path, "gp": cfg["gp"]}
+    )
     logger.info("NSGA-II 多目标 GP | 配置：%s", config_path)
 
     clean_path = dcfg.get("clean_path", "data/cache/prices_clean.parquet")
