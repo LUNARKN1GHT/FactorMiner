@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 
-from data.loader import load_daily_prices, load_universe_cached
+from data.loader import load_daily_prices, load_extra_fields, load_universe_cached
 from data.preprocess import clean_prices, compute_returns
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -32,6 +32,9 @@ def main() -> None:
 
     prices = clean_prices(raw)
     prices = compute_returns(prices, period=args.period)
+
+    extra = load_extra_fields(codes, args.start, args.end)
+    prices = prices.join(extra, how="left")
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)

@@ -139,6 +139,47 @@ def _fetch_tushare(
     return df[keep + ["code"]].copy()
 
 
+def _fetch_tushare_extra(code: str, start_date: str, end_date: str, pro, retries: int = 3):
+    """拉 daily_basic（市值/换手/估值）+ moneyflow（资金流），按 trade_date 合并。"""
+    ts_code = _to_ts_code(code=code)
+    s, e = start_date.replace("-", ""), end_date.replace("-", "")
+
+    def _call(fn):
+        for attempt in range(retries):
+            try:
+                return fn()
+            except Exception:
+                if attempt == retries - 1:
+                    raise
+                time.sleep(2**attempt)
+
+    basic = _call(
+        lambda: pro.daily_basic(
+            ts_code=ts_code,
+            start_date=s,
+            end_date=e,
+            fields="trade_date,turnover_rate,total_mv,pb",
+        )
+    )
+    flow = _call(
+        lambda: pro.moneyflow(
+            ts_code=ts_code,
+            start_date=s,
+            end_date=e,
+            fields="trade_date,net_mf_amount",
+        )
+    )
+
+    df = basic.merge(flow, on="trade_date", how="outer")
+    df["date"] = pd.to_datetime(df["trade_date"])
+    df["code"] = code
+    import numpy as np
+
+    df["log_mv"] = np.log(df["total_mv"].where(df["total_mv"] > 0))  # 对数市值
+    df = df.rename(columns={"turnover_rate": "turnover", "net_mf_amount": "net_mf"})
+    return df[["date", "code", "log_mv", "turnover", "pb", "net_mf"]]
+
+
 # ---------------------------------------------------------------------------
 # 公共接口
 # ---------------------------------------------------------------------------
@@ -260,3 +301,54 @@ def load_universe_cached(
     cache_file.write_text("\n".join(codes))
     logger.info("成分股已缓存：%d 只", len(codes))
     return codes
+
+
+def load_extra_fields(
+    codes: list[str],
+    start_date: str,
+    end_date: str,
+    cache_dir: Path | str | None = None,
+    request_interval: float = 2.0,
+) -> pd.DataFrame:
+    """加载正交风格字段（市值/换手/估值/资金流），逐股缓存 + 断点续传。
+
+    返回 MultiIndex(date, code)，columns=[log_mv, turnover, pb, net_mf]。
+    结构对标 load_daily_prices，只是数据源换成 daily_basic + moneyflow。
+    """
+    _load_env()
+    pro = _get_tushare_pro()  # 这批字段只有 tushare 有，不走 akshare
+
+    cache_dir = Path(cache_dir) if cache_dir else _CACHE_DIR
+    extra_cache_dir = cache_dir / "extra"
+    extra_cache_dir.mkdir(parents=True, exist_ok=True)
+
+    frames: list[pd.DataFrame] = []
+    missing: list[str] = []
+    for code in codes:
+        p = _stock_cache_path(code, start_date, end_date, extra_cache_dir)
+        if p.exists():
+            frames.append(pd.read_parquet(p))
+        else:
+            missing.append(code)
+
+    if missing:
+        logger.info("[extra] 已缓存 %d 只，待拉取 %d 只", len(codes) - len(missing), len(missing))
+        for i, code in enumerate(missing):
+            try:
+                df = _fetch_tushare_extra(code, start_date, end_date, pro)
+                df.to_parquet(_stock_cache_path(code, start_date, end_date, extra_cache_dir))
+                frames.append(df)
+            except Exception as e:
+                logger.warning("[extra] 拉取 %s 失败（跳过）：%s", code, e)
+            if i < len(missing) - 1:
+                time.sleep(request_interval)  # tushare 免费版限频
+            if (i + 1) % 50 == 0:
+                logger.info("进度 %d / %d", len(codes) - len(missing) + i + 1, len(codes))
+    else:
+        logger.info("[extra] 全部 %d 只命中缓存", len(codes))
+
+    if not frames:
+        raise RuntimeError("没有任何额外字段数据，请检查 tushare 配置。")
+
+    result = pd.concat(frames, ignore_index=True)
+    return result.set_index(["date", "code"]).sort_index()

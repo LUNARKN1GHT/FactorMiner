@@ -32,7 +32,18 @@ class GPConfig:
 
 # ---- 终端集（叶节点） ----
 
-TERMINALS = ["open", "high", "low", "close", "volume", "amount"]
+TERMINALS = [
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "amount",
+    "log_mv",
+    "turnover",
+    "pb",
+    "net_mf",
+]
 TS_WINDOWS = [5, 10, 20]
 
 
