@@ -151,7 +151,7 @@ def _fetch_tushare_extra(code: str, start_date: str, end_date: str, pro, retries
             except Exception:
                 if attempt == retries - 1:
                     raise
-                time.sleep(2**attempt)
+                time.sleep(61)
 
     basic = _call(
         lambda: pro.daily_basic(
@@ -308,7 +308,7 @@ def load_extra_fields(
     start_date: str,
     end_date: str,
     cache_dir: Path | str | None = None,
-    request_interval: float = 2.0,
+    request_interval: float = 61.0,
 ) -> pd.DataFrame:
     """加载正交风格字段（市值/换手/估值/资金流），逐股缓存 + 断点续传。
 
