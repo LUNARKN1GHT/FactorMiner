@@ -19,16 +19,31 @@ from __future__ import annotations
 
 import json
 import logging
+import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 
 _LOG_ROOT = Path(__file__).parents[2] / "results" / "logs"
 
 
+def _git_commit() -> str:
+    """获取当前短 commit；不在 git 仓或返回失败就返回空串"""
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True
+        )
+        return out.stdout.strip()
+    except Exception:
+        return ""
+
+
 def setup_experiment_logger(
     exp_id: str | None = None,
     log_root: Path | str | None = None,
     level: int = logging.INFO,
+    tag: str | None = None,
+    meta: dict | None = None,
 ) -> tuple[logging.Logger, Path]:
     """初始化实验日志，返回 (logger, log_dir)。
 
@@ -50,10 +65,26 @@ def setup_experiment_logger(
     """
     if exp_id is None:
         exp_id = "exp_" + datetime.now().strftime("%Y%m%d_%H%M%S")
+        if tag:  # 人读标签进目录名，ls 即可辨认
+            safe = tag.strip().replace(" ", "-").replace("/", "-")
+            exp_id = f"{exp_id}_{safe}"
 
     log_root = Path(log_root) if log_root else _LOG_ROOT
     log_dir = log_root / exp_id
     log_dir.mkdir(parents=True, exist_ok=True)
+
+    # -- 出处落盘：直接还原「这次跑了什么」--
+    record: dict = {
+        "exp_id": exp_id,
+        "tag": tag,
+        "argv": sys.argv,
+        "git_commit": _git_commit(),
+        "started_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    if meta:
+        record.update(meta)
+    with open(log_dir / "meta.json", "w", encoding="utf-8") as f:
+        json.dump(record, f, ensure_ascii=False, indent=2)
 
     logger = logging.getLogger(exp_id)
     logger.setLevel(level)

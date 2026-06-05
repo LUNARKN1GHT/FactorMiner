@@ -20,7 +20,9 @@ def main(config_path: str = "configs/default.yaml") -> None:
         cfg = yaml.safe_load(f)
     method = cfg["evaluation"]["ic_method"]
 
-    logger, log_dir = setup_experiment_logger()
+    logger, log_dir = setup_experiment_logger(
+        tag="stgp", meta={"config": config_path, "gp": cfg["gp"]}
+    )
     logger.info("STGP smoke | 配置：%s", config_path)
 
     prices = pd.read_parquet(cfg["data"].get("clean_path", "data/cache/prices_clean.parquet"))
