@@ -6,6 +6,7 @@
 - **选择准则对比**：新增 [`compare_selection.py`](../scripts/compare_selection.py)，离线对比 train-max / min-size / parsimony——证明瓶颈不在选法，在搜出来的因子本就弱；顺带解开「负衰减」之谜（n=3 时一折 regime 运气主导汇总）。
 - **显著性校正**：新增 [`significance.py`](../scripts/significance.py)（Newey-West 修单因子重叠，naive→NW 约 1.8× haircut）与 [`deflated.py`](../scripts/deflated.py)（Deflated Sharpe，break-even N\* 判活）。结论：**三折无一经得起重叠 + 选择偏差双重校正**。
 - **笔记**：样本外验证完整结论写入 [`验证模块.md`](./验证模块.md)。
+- **强类型 GP（STGP）**：新增 [`stgp.py`](../src/gp/stgp.py)（S/R 类型系统 + 类型化生成/交叉/变异 + recompute_type 自检），`Node` 加 `out_type`、`GPConfig` 加 `strongly_typed` 开关、`nsga2` 据开关选算子（排序逻辑复用）。配套 [`run_stgp.py`](../scripts/run_stgp.py) 与跨 run 对照 [`compare_runs.py`](../scripts/compare_runs.py)。结论：搜索空间剪干净（`非法 0 例`）但**样本外没改善**，钉死「瓶颈在特征贫瘠而非搜索合法性」。笔记 [`强类型GP.md`](./强类型GP.md)。
 - （均在 `develop` 分支开发，待合并入 `main`）
 
 ## 2026-06-03
