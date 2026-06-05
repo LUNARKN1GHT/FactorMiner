@@ -49,11 +49,6 @@ def rank(x: pd.DataFrame) -> pd.DataFrame:
     return x.rank(axis=1, pct=True)  # type: ignore
 
 
-def sign(x: pd.DataFrame) -> pd.DataFrame:
-    """取符号，把幅度信息抹掉，只留方向"""
-    return np.sign(x)
-
-
 def scale(x: pd.DataFrame) -> pd.DataFrame:
     """截面缩放：每天除以当日 ｜值｜ 之和，使绝对值和为 1"""
     denom = x.abs().sum(axis=1)
@@ -144,7 +139,6 @@ UNARY_OPS = {
     "abs": (abs_op, 1),
     "log": (log_op, 1),
     "rank": (rank, 1),
-    "sign": (sign, 1),
     "scale": (scale, 1),
 }
 

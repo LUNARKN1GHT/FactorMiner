@@ -21,6 +21,8 @@ from src.gp.nsga2 import run_gp_nsga2
 from src.gp.tree import Node
 from src.utils.logger import setup_experiment_logger
 
+MIN_DISTINCT = 4  # 截面不同取值的中位数下限
+
 
 def make_rolling_windows(
     splits: list[pd.Timestamp],
@@ -54,11 +56,22 @@ def make_objective(
 
     def objective_fn(tree: Node) -> float | None:
         try:
-            ic = calc_ic_series(evaluate(tree, wide), fwd_train, method=method).dropna()
+            fac = evaluate(tree, wide=wide)
         except Exception:
             return None
+
+        # 退化守卫：近常数因子截面取值极少，会导致 std(IC) 变成 0
+        if fac.nunique(axis=1).median() < MIN_DISTINCT:
+            return None
+
+        try:
+            ic = calc_ic_series(fac, fwd_train, method=method).dropna()
+        except Exception:
+            return None
+
         if len(ic) < 10:
             return None
+
         icir = calc_icir(ic)
         return abs(icir) if pd.notna(icir) else None
 
@@ -155,14 +168,19 @@ def main(config_path: str = "configs/default.yaml") -> None:
         )
 
     # 均值会把「碰运气灵一折」和「三折都灵」抹平，所以同时报离散度（标准差 / 最差折）
-    te_list = [float(p[3]) for p in picks]  # p[3] = 该折 test|ICIR|（绝对值）
-    logger.info(
-        "OOS |ICIR| 各折=%s | 均值=%.4f 标准差=%.4f 最差=%.4f",
-        [round(x, 4) for x in te_list],
-        statistics.mean(te_list),
-        statistics.pstdev(te_list),
-        min(te_list),
-    )
+    te_list = [
+        float(p[3]) for p in picks if pd.notna(p[3])
+    ]  # 过滤 NaN，退化/常数因子的测试段会是 NaN
+    if te_list:
+        logger.info(
+            "OOS |ICIR| 各折=%s | 均值=%.4f 标准差=%.4f 最差=%.4f",
+            [round(x, 4) for x in te_list],
+            statistics.mean(te_list),
+            statistics.pstdev(te_list),
+            min(te_list),
+        )
+    else:
+        logger.info("OOS |ICIR| 全部无效（NaN）——本轮无可汇总因子")
 
     # 落盘：窗口 + 每折完整前沿（含表达式树，可日后重新评估）+ 跨折选中因子
     payload = {"config_path": config_path, "folds": fold_results, "picks": picks}
