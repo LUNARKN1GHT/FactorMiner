@@ -2,7 +2,7 @@
 
 import pandas as pd
 
-from src.gp.operators import BINARY_OPS, TS_OPS, UNARY_OPS
+from src.gp.operators import BINARY_OPS, TS_BINARY_OPS, TS_OPS, UNARY_OPS
 from src.gp.tree import Node
 
 
@@ -19,8 +19,11 @@ def to_wide(prices: pd.DataFrame) -> dict[str, pd.DataFrame]:
 
 
 # 把三张算子表合并成「算子名 -> 函数」的查找表
-_FUNCS = {name: fn for name, (fn, _) in {**BINARY_OPS, **UNARY_OPS, **TS_OPS}.items()}
+_FUNCS = {
+    name: fn for name, (fn, _) in {**BINARY_OPS, **UNARY_OPS, **TS_OPS, **TS_BINARY_OPS}.items()
+}
 _TS_NAMES = set(TS_OPS)
+_TS_BIN_NAMES = set(TS_BINARY_OPS)
 
 
 def evaluate(node: Node, wide: dict[str, pd.DataFrame]) -> pd.DataFrame:
@@ -40,6 +43,11 @@ def evaluate(node: Node, wide: dict[str, pd.DataFrame]) -> pd.DataFrame:
         x = evaluate(node=node.children[0], wide=wide)  # 先递归算出子序列
         # 带窗口调用 ts_
         return fn(x, int(node.value))  # type:ignore
+    # 3. 时序二元算子：两个子树 + 窗口
+    if node.name in _TS_BIN_NAMES:
+        x = evaluate(node.children[0], wide=wide)
+        y = evaluate(node.children[1], wide=wide)
+        return fn(x, y, int(node.value))  # type: ignore
 
     # 算术 / 一元 / 截面算子：先算出所有子树，再当前位置参数传入
     args = [evaluate(c, wide=wide) for c in node.children]

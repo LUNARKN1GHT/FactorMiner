@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-from src.gp.operators import BINARY_OPS, TS_OPS, UNARY_OPS
+from src.gp.operators import BINARY_OPS, TS_BINARY_OPS, TS_OPS, UNARY_OPS
 from src.gp.tree import Node, collect_nodes
 from src.utils.logger import log_generation
 
@@ -44,6 +44,7 @@ def random_terminal() -> Node:
 # ---- 随机树生成 ----
 
 TS_OP_NAMES = set(TS_OPS)
+TS_BIN_NAMES = set(TS_BINARY_OPS)
 
 
 def _within_limit(node: Node, max_depth: int) -> bool:
@@ -58,13 +59,23 @@ def random_tree(max_depth: int, min_depth: int = 0) -> Node:
         return random_terminal()
 
     # 定义所有操作的集合
-    all_ops = list(BINARY_OPS.items()) + list(UNARY_OPS.items()) + list(TS_OPS.items())
+    all_ops = (
+        list(BINARY_OPS.items())
+        + list(UNARY_OPS.items())
+        + list(TS_OPS.items())
+        + list(TS_BINARY_OPS.items())
+    )
     op_name, (_, arity) = random.choice(all_ops)
 
     if op_name in TS_OP_NAMES:
         # 时序算子：树上只有一个子节点，窗口长度存进 value
         child = random_tree(max_depth - 1, min_depth - 1)
         return Node(name=op_name, arity=1, children=[child], value=random.choice(TS_WINDOWS))
+
+    if op_name in TS_BIN_NAMES:
+        # 时序二元算子：硬编码两个孩子
+        kids = [random_tree(max_depth - 1, min_depth - 1) for _ in range(2)]
+        return Node(name=op_name, arity=2, children=kids, value=random.choice(TS_WINDOWS))
 
     # 算术（二元）/一元/截面算子：通常按arity生成子树
     children = [random_tree(max_depth - 1, min_depth - 1) for _ in range(arity)]
@@ -210,13 +221,23 @@ def full_tree(max_depth: int) -> Node:
     if max_depth <= 0:
         return random_terminal()
 
-    all_ops = list(BINARY_OPS.items()) + list(UNARY_OPS.items()) + list(TS_OPS.items())
+    all_ops = (
+        list(BINARY_OPS.items())
+        + list(UNARY_OPS.items())
+        + list(TS_OPS.items())
+        + list(TS_BINARY_OPS.items())
+    )
     op_name, (_, arity) = random.choice(all_ops)
 
     if op_name in TS_OP_NAMES:
         # 时序算子：窗口存 value，挂一个子树
         child = full_tree(max_depth - 1)
         return Node(name=op_name, arity=1, children=[child], value=random.choice(TS_WINDOWS))
+
+    if op_name in TS_BIN_NAMES:
+        # 时序二元算子：硬编码两个孩子
+        kids = [random_tree(max_depth - 1) for _ in range(2)]
+        return Node(name=op_name, arity=2, children=kids, value=random.choice(TS_WINDOWS))
 
     children = [full_tree(max_depth - 1) for _ in range(arity)]
     return Node(name=op_name, arity=arity, children=children)

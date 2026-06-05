@@ -10,7 +10,7 @@ from __future__ import annotations
 import copy
 import random
 
-from src.gp.engine import TERMINALS, TS_WINDOWS
+from src.gp.engine import TERMINALS, TS_BINARY_OPS, TS_WINDOWS
 from src.gp.operators import BINARY_OPS, TS_OPS, UNARY_OPS
 from src.gp.tree import Node, collect_nodes
 
@@ -27,9 +27,12 @@ for _t in TYPES:
             PRODUCERS[_t].append((_name, [_t]))
     for _name in TS_OPS:
         PRODUCERS[_t].append((_name, [_t]))
+    for _name in TS_BINARY_OPS:
+        PRODUCERS[_t].append((_name, [_t, _t]))
 PRODUCERS["R"].append(("rank", ["S"]))  # rank: S-R 是唯一的类型转换口
 
 TS_OP_NAMES = set(TS_OPS)
+TS_WINDOW_NAMES = set(TS_OPS) | set(TS_BINARY_OPS)  # 这些算子要在 value 里面存窗口
 
 
 def typed_terminal() -> Node:
@@ -60,7 +63,7 @@ def typed_random_tree(out_type: str, max_depth: int, min_depth: int = 0) -> Node
         typed_random_tree(out_type=at, max_depth=max_depth - 1, min_depth=min_depth - 1)
         for at in arg_types
     ]
-    value = random.choice(TS_WINDOWS) if name in TS_OP_NAMES else None
+    value = random.choice(TS_WINDOWS) if name in TS_WINDOW_NAMES else None
     return Node(name=name, arity=len(children), children=children, value=value, out_type=out_type)
 
 

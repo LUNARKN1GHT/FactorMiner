@@ -121,6 +121,15 @@ def decay_linear(x: pd.DataFrame, window: int) -> pd.DataFrame:
     return out
 
 
+# ---- 时序二元算子 ----
+
+
+def ts_corr(x: pd.DataFrame, y: pd.DataFrame, window: int) -> pd.DataFrame:
+    """两序列的滚动时序相关系数"""
+    out = x.rolling(window=window, min_periods=max(2, window // 2)).corr(y)
+    return out.replace([np.inf, -np.inf], 0.0)
+
+
 # ---- 算子注册表 ----
 
 BINARY_OPS = {
@@ -150,3 +159,5 @@ TS_OPS = {
     "ts_argmax": (ts_argmax, 2),
     "decay_linear": (decay_linear, 2),
 }
+
+TS_BINARY_OPS = {"ts_corr": (ts_corr, 3)}
