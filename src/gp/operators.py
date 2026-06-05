@@ -49,6 +49,17 @@ def rank(x: pd.DataFrame) -> pd.DataFrame:
     return x.rank(axis=1, pct=True)  # type: ignore
 
 
+def sign(x: pd.DataFrame) -> pd.DataFrame:
+    """取符号，把幅度信息抹掉，只留方向"""
+    return np.sign(x)
+
+
+def scale(x: pd.DataFrame) -> pd.DataFrame:
+    """截面缩放：每天除以当日 ｜值｜ 之和，使绝对值和为 1"""
+    denom = x.abs().sum(axis=1)
+    return x.div(denom, axis=0).replace([np.inf, -np.inf], 0.0)
+
+
 # ---- 时序算子 ----
 
 
@@ -81,6 +92,35 @@ def delta(x: pd.DataFrame, period: int) -> pd.DataFrame:
     return x - x.shift(period)
 
 
+def ts_max(x: pd.DataFrame, window: int) -> pd.DataFrame:
+    """滚动窗口内最大值"""
+    return x.rolling(window=window, min_periods=1).min()
+
+
+def ts_min(x: pd.DataFrame, window: int) -> pd.DataFrame:
+    """滚动窗口最小值。"""
+    return x.rolling(window, min_periods=1).min()
+
+
+def ts_argmax(x: pd.DataFrame, window: int) -> pd.DataFrame:
+    """距窗口内最高点过了几天，是一种择时/位置信号"""
+
+    def _days_since_high(arr: pd.Series):
+        return len(arr) - 1 - arr.argmax()
+
+    return x.rolling(window=window, min_periods=1).apply(_days_since_high, raw=True)
+
+
+def decay_linear(x: pd.DataFrame, window: int) -> pd.DataFrame:
+    """线性加权平均：越近的日子权重越大，之后进行归一化"""
+    weights = np.arange(1, window + 1, dtype=float)
+    weights /= weights.sum()
+    out = x.shift(window - 1) * weights[0]
+    for i in range(1, window):
+        out = out + x.shift(window - 1 - i) * weights[i]
+    return out
+
+
 # ---- 算子注册表 ----
 
 BINARY_OPS = {
@@ -95,6 +135,8 @@ UNARY_OPS = {
     "abs": (abs_op, 1),
     "log": (log_op, 1),
     "rank": (rank, 1),
+    "sign": (sign, 1),
+    "scale": (scale, 1),
 }
 
 TS_OPS = {
@@ -103,4 +145,8 @@ TS_OPS = {
     "ts_rank": (ts_rank, 2),
     "delay": (delay, 2),
     "delta": (delta, 2),
+    "ts_max": (ts_max, 2),
+    "ts_min": (ts_min, 2),
+    "ts_argmax": (ts_argmax, 2),
+    "decay_linear": (decay_linear, 2),
 }
