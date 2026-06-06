@@ -10,6 +10,7 @@ import statistics
 import sys
 from collections.abc import Callable
 
+import numpy as np
 import pandas as pd
 import yaml
 
@@ -22,6 +23,8 @@ from src.gp.tree import Node
 from src.utils.logger import setup_experiment_logger
 
 MIN_DISTINCT = 4  # 截面不同取值的中位数下限
+STAB_K = 3  # 训练段切几个子区间算稳定性
+STAB_LAMBDA = 1.0  # 子段 ICIR 离散度的惩罚力度
 
 
 def make_rolling_windows(
@@ -69,11 +72,18 @@ def make_objective(
         except Exception:
             return None
 
-        if len(ic) < 10:
+        if len(ic) < 10 * STAB_K:  # 每个字段至少 ～10 个观测
             return None
 
-        icir = calc_icir(ic)
-        return abs(icir) if pd.notna(icir) else None
+        # 按时间切 K 段，各算带符号 ICIR
+        chunks = np.array_split(ic.to_numpy(), STAB_K)
+        icirs = [c.mean() / c.std(ddof=1) for c in chunks if len(c) >= 10 and c.std(ddof=1) > 0]
+        if len(icirs) < STAB_K:
+            return None
+
+        arr = np.array(icirs)
+        score = abs(arr.mean()) - STAB_LAMBDA * arr.std(ddof=1)
+        return max(0.0, float(score))
 
     return objective_fn
 
