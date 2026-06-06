@@ -1,5 +1,12 @@
 # TIMELINE
 
+## 2026-06-06
+
+- **现实约束回测（D）**：`simple.py` 加 `_tradable_masks`（涨跌停/停牌过滤）+ long-only 口径；runner [`run_backtest.py`](../scripts/run_backtest.py) 做「纸面多空 → 现实多头·收盘 → 现实多头·T+1 开盘」三级瀑布（T+1 用 open[t+1+p]/open[t+1]-1 成交收益）。
+- **核心发现**：现实约束把因子**重排序**——OOS ICIR 最强的 fold3 实盘只排第二，ICIR 最低的 fold2（低波因子）才是唯一扛过三层约束的（T+1 sharpe 0.557、最大回撤 −7%），但仍未过显著性。**ICIR 最强 ≠ 实盘最好**。
+- **笔记**：D 节收口 [`回测现实性.md`](./回测现实性.md)。
+- （均在 `develop` 分支开发，待合并入 `main`）
+
 ## 2026-06-05
 
 - **算子扩展（C1+C2）**：`operators.py` 加 `ts_max/ts_min/ts_argmax/decay_linear/scale` 等即插即用算子；新增二元时序算子 `ts_corr`（「2 孩子 + 窗口」新节点形状，碰 operators/evaluator/engine/stgp 四处）。
