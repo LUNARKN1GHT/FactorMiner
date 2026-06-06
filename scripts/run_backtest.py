@@ -1,4 +1,4 @@
-"""现实约束回测：拿 walkforward.pkl 里挑出的因子，对比「理论多空」vs「现实多头」。"""
+"""现实约束回测：从「纸面多空」逐层加现实约束，到「T+1 开盘成交的现实多头」。"""
 
 import pickle
 import sys
@@ -28,24 +28,36 @@ def main(pkl_path: str) -> None:
     wide = to_wide(prices.drop(columns=["fwd_ret"]))
     fwd = to_panel(prices, "fwd_ret")
     close = to_panel(prices, "close")  # 涨跌停/停牌过滤用
+    open_p = to_panel(prices, "open")
+    exec_ret = open_p.shift(-(1 + hold)) / open_p.shift(-1) - 1  # T + 1 开盘进、开盘出
 
-    for fold, _size, _tr, _te, _decay, tree, *_ in payload["picks"]:
-        factor = evaluate(tree, wide)
-        res = run_backtest(
-            factor, fwd, close=close, holding_period=hold, n_groups=n_groups, commission=comm
+    def _bt(ret: pd.DataFrame) -> dict:
+        return run_backtest(
+            factor_df=factor,
+            fwd_ret=ret,
+            close=close,
+            holding_period=hold,
+            n_groups=n_groups,
+            commission=comm,
         )
+
+    def _line(tag: str, m: dict) -> None:
+        logger.info(
+            "  %-18s sharpe=%6.3f 年化=%7.2f%% 最大回撤=%7.2f%%",
+            tag,
+            m["sharpe"],
+            m["ann_return"] * 100,
+            m["max_drawdown"] * 100,
+        )
+
+    for fold, _, _, _, _, tree, *_ in payload["picks"]:
+        factor = evaluate(tree, wide)
+        res_c, res_e = _bt(fwd), _bt(exec_ret)
         logger.info("")
-        logger.info("=== fold%d  %s ===", fold, tree)
-        for label, key in (("理论多空", "long_short"), ("现实多头", "long_only")):
-            m = res[key]
-            logger.info(
-                "  %-8s sharpe=%6.3f 年化=%7.2f%% 最大回撤=%7.2f%% 平均换手=%.2f",
-                label,
-                m["sharpe"],
-                m["ann_return"] * 100,
-                m["max_drawdown"] * 100,
-                m["avg_turnover"],
-            )
+        logger.info("=== fold%d. %s ===", fold, tree)
+        _line("纸面多空·收盘T0", res_c["long_short"])  # 含不可实现空头 + 收盘即成交
+        _line("现实多头·收盘T0", res_c["long_only"])  # 去空头 + 涨跌停过滤
+        _line("现实多头·T+1开盘", res_e["long_only"])  # 再加 T+1 开盘成交
 
 
 if __name__ == "__main__":
