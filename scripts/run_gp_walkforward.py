@@ -25,6 +25,7 @@ from src.utils.logger import setup_experiment_logger
 MIN_DISTINCT = 4  # 截面不同取值的中位数下限
 STAB_K = 3  # 训练段切几个子区间算稳定性
 STAB_LAMBDA = 1.0  # 子段 ICIR 离散度的惩罚力度
+ORTH_LAMBDA = 0.3  # 与 amount 秩相关的惩罚力度
 
 
 def make_rolling_windows(
@@ -51,11 +52,13 @@ def make_rolling_windows(
 def make_objective(
     wide: dict[str, pd.DataFrame], fwd_train: pd.DataFrame, method: str
 ) -> Callable[[Node], float | None]:
-    """构造 NSGA 的单目标函数：本折训练段 |ICIR|，求值失败返回 None。
+    """稳定性 + 正交性适应度：奖励「跨段都稳」，惩罚「与流动性 amount 同质」。
 
     在 main 的 fold 循环里每折调一次——把当折的 fwd_train 绑进闭包，
     既避免「循环里定义闭包捕获循环变量」的坑，也和 fitness.make_fitness 同一套路。
     """
+    train_dates = fwd_train.index
+    a_rank = wide["amount"].reindex(train_dates).rank(axis=1)  # 流动性基准，预先算好（仅训练段）
 
     def objective_fn(tree: Node) -> float | None:
         try:
@@ -80,9 +83,13 @@ def make_objective(
         icirs = [c.mean() / c.std(ddof=1) for c in chunks if len(c) >= 10 and c.std(ddof=1) > 0]
         if len(icirs) < STAB_K:
             return None
-
         arr = np.array(icirs)
-        score = abs(arr.mean()) - STAB_LAMBDA * arr.std(ddof=1)
+
+        # 正交性惩罚
+        orth = fac.reindex(train_dates).rank(axis=1).corrwith(a_rank, axis=1).abs().mean()
+        orth = 0.0 if pd.isna(orth) else float(orth)
+
+        score = abs(arr.mean()) - STAB_LAMBDA * arr.std(ddof=1) - ORTH_LAMBDA * orth
         return max(0.0, float(score))
 
     return objective_fn
