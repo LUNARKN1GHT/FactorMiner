@@ -1,5 +1,14 @@
 # TIMELINE
 
+## 2026-06-05
+
+- **算子扩展（C1+C2）**：`operators.py` 加 `ts_max/ts_min/ts_argmax/decay_linear/scale` 等即插即用算子；新增二元时序算子 `ts_corr`（「2 孩子 + 窗口」新节点形状，碰 operators/evaluator/engine/stgp 四处）。
+- **reward hacking 修复**：`sign` 制造近常数因子把 ICIR 黑到 199（第三种 ICIR 不可信来源）。删 `sign` + 搜索目标加退化守卫（`nunique` 中位数下限）+ 汇总对 NaN 免疫。
+- **C 扩算子结果**：walk-forward OOS 首次三项全面改善（均值 0.16、方差降、最差折翻三倍），主力是 `ts_corr`（价量关系）——「抬地板不抬天花板」；但仍过不了 deflated Sharpe。跨 run 对照脚本 [`compare_runs.py`](../scripts/compare_runs.py)。
+- **C3 正交数据**：设计完成（baostock/基本面 + point-in-time 防泄露），但 tushare 接口限流、执行推迟。
+- **笔记**：C 节收口 [`算子与数据.md`](./算子与数据.md)。下一站转 D（回测现实性）。
+- （均在 `develop` 分支开发，待合并入 `main`）
+
 ## 2026-06-04
 
 - **walk-forward 全量结果**：滚动窗三折跑通，整条前沿连表达式树落盘 `walkforward.pkl`，后续分析不重跑 GP。结论：因子方向稳但强度不稳（OOS \|ICIR\| 均值 0.14、标准差 0.10），幸存者清一色量/额类。
