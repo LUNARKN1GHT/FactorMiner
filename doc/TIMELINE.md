@@ -5,7 +5,9 @@
 - **适应度函数纵深 B+·① 时序稳定性**：`make_objective` 改为切 K=3 子区间各算 ICIR，适应度取 `|mean(ICIR_k)| − λ·std(ICIR_k)`，逼搜索偏向跨期稳定因子。结果：fold2 NW_t 从 1.29 → **2.84**（p=0.0045 ✓）、fold3 NW_t 2.23 → 2.59（p=0.0097 ✓），信号质量大幅提升，**首次在小 N（<30）下通过 deflated Sharpe**。
 - **新发现：稳定性适应度的方向盲区**：`abs(arr.mean())` 对正负 ICIR 一视同仁，选出了两个一致负方向因子（ICIR=-0.29）；回测多头买顶分位 → 实际买了预测跑输的票 → 三折全负 sharpe。修法：`run_backtest.py` 在喂入回测前按 `train_icir` 符号翻转因子。负 ICIR 因子本身是有效反转信号，并非无效，只需方向修正。
 - **结论**：稳定性适应度解决了正确的问题（OOS 信号更真实），OOS |ICIR| 均值 0.16→0.21，但暴露了回测方向 bug。两个独立问题被同一次实验同时暴露。
-- **② 正交性压力**：适应度叠加 `−ORTH_LAMBDA·|corr(factor, amount)|`，服务器跑中。
+- **适应度函数纵深 B+·② 正交性压力**：适应度叠加 `−ORTH_LAMBDA·|corr(factor, amount)|` 逼搜索逃离流动性吸引盆。结果：**惩罚口径打偏**——只挡得住 amount 的单调变换（volume/ts_std(amount)），挡不住「以 amount 为输入的关系类因子」`ts_corr(amount, high)`（其值是相关系数，与 amount 水平不单调，从缝里钻出）。真发现：正交化的惩罚量纲必须对准要剥离的形态。副产物：② 反选出统计质量最高的因子，fold2 NW_t **3.40**（p=0.0007），首次稳过小 N deflated Sharpe。
+- **工程：并行评估 + 统一评估入口**：`_eval_objs` 用 joblib（`n_jobs` 从 config 读，公共服务器占 10 核）并行适应度评估 + 预算 fwd 收益排名常量，全量 walk-forward 从 **8h 压到 1h**。新增 [`evaluate_run.py`](../scripts/evaluate_run.py)：一个 pkl 进、数据只读一次、每折树只求值一次，一次跑完「方向修正 → 测试段回测三层 → NW 显著性 → deflated 存活线」，消除原四脚本各自重复读数据/重算树。
+- **B+ 收口结论**：纯量价 GP 能挖到统计显著的真信号（① 前置稳定性 + ② 选出 `ts_corr(amount,high)`，首次过 deflated），但方向修正后实盘多头在 2022 熊市仍亏（截面排序 ≠ 多头绝对 PnL，D 节复现）。最终判决：高效市场 + 多头约束下，纯量价难转化为可落地多头超额。笔记 [`适应度函数纵深.md`](./适应度函数纵深.md)。
 - **现实约束回测（D）**：`simple.py` 加 `_tradable_masks`（涨跌停/停牌过滤）+ long-only 口径；runner [`run_backtest.py`](../scripts/run_backtest.py) 做「纸面多空 → 现实多头·收盘 → 现实多头·T+1 开盘」三级瀑布（T+1 用 open[t+1+p]/open[t+1]-1 成交收益）。
 - **核心发现**：现实约束把因子**重排序**——OOS ICIR 最强的 fold3 实盘只排第二，ICIR 最低的 fold2（低波因子）才是唯一扛过三层约束的（T+1 sharpe 0.557、最大回撤 −7%），但仍未过显著性。**ICIR 最强 ≠ 实盘最好**。
 - **笔记**：D 节收口 [`回测现实性.md`](./回测现实性.md)。
