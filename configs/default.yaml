@@ -9,6 +9,7 @@ gp:
   max_depth: 6
   min_depth: 2
   strongly_typed: true
+  n_jobs: 10
 
 data:
   start_date: "2018-01-01"

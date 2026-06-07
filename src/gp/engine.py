@@ -29,6 +29,9 @@ class GPConfig:
     strongly_typed: bool = False
     """开启强类型 GP： 用 stgp 的类型化生成/急哦啊差/变异，只产生合法因子"""
 
+    n_jobs: int = 1
+    """允许使用的并发核心数量"""
+
 
 # ---- 终端集（叶节点） ----
 

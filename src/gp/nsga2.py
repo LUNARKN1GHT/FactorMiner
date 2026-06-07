@@ -12,6 +12,8 @@ import random
 from collections.abc import Callable
 from pathlib import Path
 
+from joblib import Parallel, delayed
+
 from src.gp.engine import GPConfig, _within_limit, crossover, mutate, ramped_half_and_half
 from src.gp.tree import Node
 from src.utils.logger import log_generation
@@ -20,21 +22,31 @@ from src.utils.logger import log_generation
 Objective = tuple[float, ...]
 
 
-def _eval_objs(pop: list[Node], objective_fn: Callable[[Node], float | None]) -> list[Objective]:
+def _eval_objs(
+    pop: list[Node], objective_fn: Callable[[Node], float | None], n_jobs=1
+) -> list[Objective]:
     """对种群逐个算目标向量 (|ICIR|, -size)；算崩的个体给极差 |ICIR|=-1。
+
+    个体间无依赖，可以直接放在所有核上并行计算
 
     Args:
         pop: 个体（表达式树）列表。
         objective_fn: 接收一棵树、返回 |ICIR| 或 None（无效）的函数。
+        n_jobs: 使用多核进行并发评估
 
     Returns:
         与 pop 等长的目标向量列表。
     """
-    out: list[Objective] = []
-    for t in pop:
-        icir = objective_fn(t)
-        out.append((icir if icir is not None else -1.0, -float(t.size())))
-    return out
+    if n_jobs == 1:
+        icirs = [objective_fn(t) for t in pop]
+    else:
+        # 并发计算
+        icirs = Parallel(n_jobs=n_jobs, backend="loky", batch_size=32)(
+            delayed(objective_fn)(t) for t in pop
+        )
+    return [
+        (ic if ic is not None else -1.0, -float(t.size())) for t, ic in zip(pop, icirs, strict=True)
+    ]
 
 
 def _rank_and_crowd(objs: list[Objective]) -> tuple[dict[int, int], dict[int, float]]:
@@ -192,7 +204,7 @@ def run_gp_nsga2(
         init_fn, crossover_fn, mutate_fn = ramped_half_and_half, crossover, mutate
 
     pop = init_fn(config.population_size, config.min_depth, config.max_depth)
-    objs = _eval_objs(pop, objective_fn)
+    objs = _eval_objs(pop, objective_fn, n_jobs=config.n_jobs)
 
     for gen in range(config.generations):
         rank, crowd = _rank_and_crowd(objs)
@@ -217,7 +229,7 @@ def run_gp_nsga2(
 
         # 2. 合并 P 和 Q 的到 R
         r = pop + offspring
-        r_objs = objs + _eval_objs(offspring, objective_fn)
+        r_objs = objs + _eval_objs(offspring, objective_fn, n_jobs=config.n_jobs)
 
         # 基因型去重：同一个表达式只保留一份
         uniq: dict = {}

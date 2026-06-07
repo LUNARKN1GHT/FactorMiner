@@ -59,6 +59,7 @@ def make_objective(
     """
     train_dates = fwd_train.index
     a_rank = wide["amount"].reindex(train_dates).rank(axis=1)  # 流动性基准，预先算好（仅训练段）
+    fwd_rank = fwd_train.rank(axis=1)  # 收益排名是常量，预算一次
 
     def objective_fn(tree: Node) -> float | None:
         try:
@@ -71,7 +72,8 @@ def make_objective(
             return None
 
         try:
-            ic = calc_ic_series(fac, fwd_train, method=method).dropna()
+            f = fac.reindex(train_dates).rank(axis=1)
+            ic = f.corrwith(fwd_rank.reindex(f.index), axis=1).dropna()
         except Exception:
             return None
 
@@ -86,7 +88,7 @@ def make_objective(
         arr = np.array(icirs)
 
         # 正交性惩罚
-        orth = fac.reindex(train_dates).rank(axis=1).corrwith(a_rank, axis=1).abs().mean()
+        orth = f.corrwith(a_rank.reindex(f.index), axis=1).abs().mean()
         orth = 0.0 if pd.isna(orth) else float(orth)
 
         score = abs(arr.mean()) - STAB_LAMBDA * arr.std(ddof=1) - ORTH_LAMBDA * orth
