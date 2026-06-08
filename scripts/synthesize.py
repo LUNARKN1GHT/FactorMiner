@@ -75,7 +75,7 @@ def main(pkl_path: str) -> None:
     print(flat.corr().round(2).to_string())
 
     # ---- 等权合成 ----
-    composite = sum(r for _, r in candidates) / len(candidates)
+    composite: pd.DataFrame = sum(r for _, r in candidates) / len(candidates)
 
     # ---- 评估：单因子 vs 复合 ----
     def _stats(fac: pd.DataFrame, tag: str) -> None:
@@ -88,6 +88,17 @@ def main(pkl_path: str) -> None:
     for expr, r in candidates:
         _stats(r, expr[:28])
     _stats(composite, "★ 复合因子（等权）")
+
+    # ---- 分组单调性：复合因子分 n_groups 组，各组平均未来日收益 ----
+    print("\n=== 复合因子分组单调性（各组平均未来日收益，bp）===")
+    ranks = composite.rank(axis=1, pct=True)
+    fwd_al = fwd.reindex_like(composite)
+    for g in range(n_groups):
+        lo, hi = g / n_groups, (g + 1) / n_groups
+        mask = (ranks > lo) & (ranks <= hi)
+        grp = fwd_al.where(mask).stack().mean()  # 该股所有平均收益
+        bar = "█" * int(max(0, grp * 1e4))
+        print(f"  G{g + 1} [{lo:.1f}-{hi:.1f}]  {grp * 1e4:+6.1f}bp  {bar}")
 
     # ---- 回测：多空对冲（纯 alpha）+ 现实多头 T+1 ----
     def _bt(ret: pd.DataFrame) -> dict:
