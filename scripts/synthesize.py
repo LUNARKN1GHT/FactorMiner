@@ -100,6 +100,25 @@ def main(pkl_path: str) -> None:
         bar = "█" * int(max(0, grp * 1e4))
         print(f"  G{g + 1} [{lo:.1f}-{hi:.1f}]  {grp * 1e4:+6.1f}bp  {bar}")
 
+    # ---- 换手处理：平滑复合因子，扫描窗口看净值、多空是否能转正 ---
+    print("\n=== 平滑窗口 vs 净多空（含 10bp 手续费）===")
+    for w in (1, 3, 5, 10, 20):
+        sm = composite.rolling(w, min_periods=1).mean()  # 按天平滑，持仓变黏 → 降换手
+        ic = calc_ic_series(sm, fwd, method=method).dropna()
+        icir = ic.mean() / ic.std()
+        res = run_backtest(
+            factor_df=sm,
+            fwd_ret=fwd,
+            close=close,
+            holding_period=hold,
+            n_groups=n_groups,
+            commission=comm,
+        )["long_short"]
+        print(
+            f"  w={w:>2}  ICIR={icir:+.3f}  "
+            f"净多空 sharpe={res['sharpe']:+.3f}  年化={res['ann_return'] * 100:+6.2f}%"
+        )
+
     # ---- 回测：多空对冲（纯 alpha）+ 现实多头 T+1 ----
     def _bt(ret: pd.DataFrame) -> dict:
         return run_backtest(
