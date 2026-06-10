@@ -93,6 +93,11 @@ def main() -> None:
     ap.add_argument("--n", type=int, default=5000, help="目标生成因子数")
     ap.add_argument("--split", default="2023-01-01", help="train/test 分界")
     ap.add_argument("--n-jobs", type=int, default=10)
+    ap.add_argument(
+        "--train-start",
+        default=None,
+        help="训练段起点（默认数据最早；设 2021-01-01 可避开 2020 regime 断点）",
+    )
     args = ap.parse_args()
 
     with open(args.config) as f:
@@ -107,7 +112,7 @@ def main() -> None:
     prices = pd.read_parquet(cfg["data"].get("clean_path", "data/cache/prices_clean.parquet"))
     wide = to_wide(prices.drop(columns=["fwd_ret"]))
     fwd = to_panel(prices, "fwd_ret")
-    train_lo = fwd.index.min()
+    train_lo = pd.Timestamp(args.train_start) if args.train_start else fwd.index.min()
     split = pd.Timestamp(args.split)
     test_hi = fwd.index.max() + pd.Timedelta(days=1)
 
