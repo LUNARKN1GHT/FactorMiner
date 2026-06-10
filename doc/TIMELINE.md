@@ -4,6 +4,7 @@
 
 - **因子动物园（生成/筛选解耦）**：按 mentor 方向重构——生成与筛选拆开。新增 [`generate_factors.py`](../scripts/generate_factors.py)（大批量生成树+去重+并行算 train/test **mean IC**，存 `factor_library.pkl`/`.csv`，指标改 IC 不用 ICIR）与 [`screen_factors.py`](../scripts/screen_factors.py)（按 |test IC| 取 top-K + 测试段回测）。脚本语法/依赖/签名已核验。纪律：测试集选 top = 选择偏差，winner 仍要过 deflated。这套是后续 RL 挖因子（PPO 换 GP、IC 当 reward）的底座。笔记 [`因子动物园.md`](./因子动物园.md)。
 - 待办：服务器冒烟（`--n 200`）→ 看 test IC 尾部 → 放量 5000 → winner 过 deflated。
+- **Regime 断点（本阶段最硬发现）**：因子动物园放量 5000 后，naive 按 test IC 选翻车（train_ic≈0.01/test_ic≈0.07，选择偏差）。查根因算全库 train/test IC 秩相关 rho=**−0.295**（负！），再做逐年 IC 持续性诊断（[`diagnose_persistence.py`](../scripts/diagnose_persistence.py)）——年×年矩阵暴露**两个 regime 簇 {2019,2020} vs {2021–2024}，断点在 2020→2021，跨簇全负、簇内 +0.7~0.85**。这解释了之前所有 walk-forward OOS 崩塌：训练窗全骑在断点上、混了两个相反 regime。**修法**：训练段砍到 2021 起（`--train-start`，避开断点），rho **−0.295→+0.801**，top 因子 train/test 同号同量级、测试段 long-only T+1 sharpe 0.6~0.9。结论：**瓶颈不是没信号，是训练窗骑 regime 断点；同 regime 内纯量价因子强持续可迁移**。限定：amount 家族主导、regime 条件性。笔记 [`regime断点.md`](./regime断点.md)。
 
 ## 2026-06-06
 
