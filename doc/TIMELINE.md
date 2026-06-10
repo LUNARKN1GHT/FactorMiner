@@ -1,5 +1,10 @@
 # TIMELINE
 
+## 2026-06-10
+
+- **因子动物园（生成/筛选解耦）**：按 mentor 方向重构——生成与筛选拆开。新增 [`generate_factors.py`](../scripts/generate_factors.py)（大批量生成树+去重+并行算 train/test **mean IC**，存 `factor_library.pkl`/`.csv`，指标改 IC 不用 ICIR）与 [`screen_factors.py`](../scripts/screen_factors.py)（按 |test IC| 取 top-K + 测试段回测）。脚本语法/依赖/签名已核验。纪律：测试集选 top = 选择偏差，winner 仍要过 deflated。这套是后续 RL 挖因子（PPO 换 GP、IC 当 reward）的底座。笔记 [`因子动物园.md`](./因子动物园.md)。
+- 待办：服务器冒烟（`--n 200`）→ 看 test IC 尾部 → 放量 5000 → winner 过 deflated。
+
 ## 2026-06-06
 
 - **适应度函数纵深 B+·① 时序稳定性**：`make_objective` 改为切 K=3 子区间各算 ICIR，适应度取 `|mean(ICIR_k)| − λ·std(ICIR_k)`，逼搜索偏向跨期稳定因子。结果：fold2 NW_t 从 1.29 → **2.84**（p=0.0045 ✓）、fold3 NW_t 2.23 → 2.59（p=0.0097 ✓），信号质量大幅提升，**首次在小 N（<30）下通过 deflated Sharpe**。
