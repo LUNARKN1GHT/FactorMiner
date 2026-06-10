@@ -50,3 +50,11 @@ def main(pkl_path: str) -> None:
     print("各年有效因子数:", m.notna().sum().to_dict())
     print("\n=== 年×年 因子 IC 秩相关（off-diagonal 看跨年持续性）===")
     print(m.corr(method="spearman").round(2).to_string())
+
+
+if __name__ == "__main__":
+    import sys
+
+    if len(sys.argv) < 2:
+        sys.exit("用法：python scripts/diagnose_persistence.py <factor_library.pkl 路径>")
+    main(sys.argv[1])
