@@ -8,8 +8,10 @@ mentor：用 IC 在测试集上挑最好的几个。
 import argparse
 import pickle
 
+import numpy as np
 import pandas as pd
 import yaml
+from scipy.stats import spearmanr
 
 from src.backtest.simple import run_backtest
 from src.data.preprocess import to_panel
@@ -29,7 +31,7 @@ def main() -> None:
     split = pd.Timestamp(lib["split"])
 
     # ---- 按 |test IC| 排序，取 top-K（IC 可正可负，绝对值=预测强度）----
-    ranked = sorted(factors, key=lambda r: abs(r["test_ic"]), reverse=True)[: args.topk]
+    ranked = sorted(factors, key=lambda r: abs(r["train_ic"]), reverse=True)[: args.topk]
 
     print(f"=== 因子库 {len(factors)} 个，按 |test IC| 取 top{args.topk} ===")
     print(f"{'#':>3} {'train_ic':>9} {'test_ic':>9} {'size':>4}  expr")
@@ -73,6 +75,12 @@ def main() -> None:
             f"  test_ic={r['test_ic']:+.4f}{flip}  多头T+1 sharpe={res['sharpe']:+.3f} "
             f"年化={res['ann_return'] * 100:+.2f}%  {r['expr']}"
         )
+
+    tr = np.array([f["train_ic"] for f in factors])
+    te = np.array([f["test_ic"] for f in factors])
+    rho = spearmanr(tr, te).correlation
+    print(f"\n全库 train_ic vs test_ic 秩相关 = {rho:+.3f}")
+    print("（>0：样本内 IC 能预测样本外，train 选有效；≈0：纯噪声，整个挖法白搭）")
 
 
 if __name__ == "__main__":
