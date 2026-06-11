@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 
@@ -18,6 +19,13 @@ class FactorPolicy(nn.Module):
     """逐 token 生成因子的自回归策略。"""
 
     def __init__(self, vocab_size: int, emb_dim: int = 32, hidden: int = 64) -> None:
+        """FactorPolicy 初始化
+
+        Args:
+            vocab_size (int): 词表大小
+            emb_dim (int, optional): 词嵌入维度. Defaults to 32.
+            hidden (int, optional): 隐藏层数量. Defaults to 64.
+        """
         super().__init__()
         self.vocab_size = vocab_size
         self.bos = vocab_size  # 句首符 index（独立于词表，放在最后一位）
@@ -28,14 +36,41 @@ class FactorPolicy(nn.Module):
     def forward(
         self, inp: torch.Tensor, h: torch.Tensor | None = None
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """inp:(B,T) long → logits:(B,T,V) 与新 hidden。"""
+        """自回归前向传播，将 token 序列映射为词表 logits。
+
+        Args:
+            inp (torch.Tensor): 输入 token 序列，shape ``(B, T)``，dtype long。
+            h (torch.Tensor | None): GRU 初始隐状态，shape ``(1, B, hidden)``；
+                ``None`` 时 GRU 自动全零初始化。
+
+        Returns:
+            tuple[torch.Tensor, torch.Tensor]:
+                - logits: 每步词表分布，shape ``(B, T, vocab_size)``，未经 softmax。
+                - h_new: 更新后的 GRU 隐状态，shape ``(1, B, hidden)``。
+        """
         out, h = self.gru(self.embed(inp), h)
         return self.head(out), h  # type: ignore
 
 
 @torch.no_grad()
 def rollout(policy: FactorPolicy, env: FactorEnv, device: str) -> dict:
-    """用策略采样生成一条因子；每步套环境 legal_mask 屏蔽非法动作。"""
+    """用策略采样生成一条完整因子序列（无梯度）。
+
+    每步从环境取 ``legal_mask`` 屏蔽非法 token，再从 Categorical 分布采样，
+    直到环境返回 ``done=True``。
+
+    Args:
+        policy (FactorPolicy): 待推理的策略网络。
+        env (FactorEnv): 因子生成环境，提供合法动作掩码与奖励。
+        device (str): 张量所在设备，如 ``"cpu"`` 或 ``"cuda"``。
+
+    Returns:
+        dict: 包含以下字段：
+            - ``"actions"`` (list[int]): 采样得到的 token 序列。
+            - ``"masks"`` (np.ndarray): 每步的合法掩码，shape ``(T, vocab_size)``。
+            - ``"reward"`` (float): 终止时环境返回的标量奖励。
+            - ``"info"`` (dict): 环境附带信息，含 ``"expr"`` 因子表达式字符串。
+    """
     env.reset()
     h = None
     prev = torch.full((1, 1), policy.bos, dtype=torch.long, device=device)
@@ -59,7 +94,22 @@ def rollout(policy: FactorPolicy, env: FactorEnv, device: str) -> dict:
 def sequence_logprob_entropy(
     policy: FactorPolicy, actions: list[int], masks: np.ndarray, device: str
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """teacher-forcing 重算这条序列被选 token 的 logprob 之和 与 总熵（带梯度）。"""
+    """Teacher-forcing 重算序列的 logprob 之和与总熵（保留梯度，供 PPO 训练使用）。
+
+    用 ``[BOS, a0, ..., a_{T-2}]`` 作为输入，一次前向得到所有时步的 logits，
+    再对每步按 ``masks`` 屏蔽非法 token 后计算 log-softmax。
+
+    Args:
+        policy (FactorPolicy): 策略网络（需处于 train 模式以保留梯度）。
+        actions (list[int]): 由 :func:`rollout` 生成的 token 序列，长度 T。
+        masks (np.ndarray): 每步合法动作掩码，shape ``(T, vocab_size)``，dtype bool。
+        device (str): 张量所在设备。
+
+    Returns:
+        tuple[torch.Tensor, torch.Tensor]:
+            - ``logprob_sum``: 被选动作 log 概率之和，标量，梯度可回传。
+            - ``entropy_sum``: 各步策略熵之和，标量，用于熵正则化鼓励探索。
+    """
     t_len = len(actions)
     # 输入 [BOS, a0, ..., a_{T-2}] → 预测 [a0, ..., a_{T-1}]
     inp = torch.tensor([policy.bos] + actions[:-1], dtype=torch.long, device=device).unsqueeze(0)
@@ -76,8 +126,6 @@ def sequence_logprob_entropy(
 
 if __name__ == "__main__":
     # 自测：假数据 + 策略，验证「能生成合法因子 + 能算 logprob + 梯度可回传」
-    import pandas as pd
-
     rng = np.random.default_rng(0)
     dates = pd.date_range("2021-01-01", periods=80)
     stocks = [f"s{i}" for i in range(30)]

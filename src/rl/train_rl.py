@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import torch
 import yaml
+from scipy.stats import spearmanr
 
 from src.data.preprocess import to_panel
 from src.evaluation.metrics import calc_ic_series
@@ -45,26 +46,30 @@ def main() -> None:
 
     prices = pd.read_parquet(cfg["data"].get("clean_path", "data/cache/prices_clean.parquet"))
     terminals = ["open", "high", "low", "close", "volume", "amount"]
-    wide = to_wide(prices.drop(columns=["fwd_ret"]))
-    fwd = to_panel(prices, "fwd_ret")
+    wide = to_wide(prices=prices.drop(columns=["fwd_ret"]))
+    fwd = to_panel(df=prices, col="fwd_ret")
     lo, hi = pd.Timestamp(args.train_start), pd.Timestamp(args.train_end)
 
-    env = FactorEnv(wide, fwd, lo, hi, method=method, terminals=terminals)
-    policy = FactorPolicy(env.vocab_size).to(args.device)
+    env = FactorEnv(
+        wide=wide, fwd=fwd, train_lo=lo, train_hi=hi, method=method, terminals=terminals
+    )
+    policy = FactorPolicy(vocab_size=env.vocab_size).to(device=args.device)
     opt = torch.optim.Adam(policy.parameters(), lr=args.lr)
 
     best_reward: dict[str, float] = {}  # expr -> 最佳 |IC|
     best_actions: dict[str, list[int]] = {}  # expr -> token 序列（重建树用）
 
     for it in range(1, args.iters + 1):
-        eps = [rollout(policy, env, args.device) for _ in range(args.batch)]
+        eps = [rollout(policy=policy, env=env, device=args.device) for _ in range(args.batch)]
         rewards = np.array([e["reward"] for e in eps])
         adv = (rewards - rewards.mean()) / (rewards.std() + 1e-8)  # 优势归一化
 
         opt.zero_grad()
         loss = torch.zeros((), device=args.device)
         for e, a in zip(eps, adv, strict=True):
-            lp, ent = sequence_logprob_entropy(policy, e["actions"], e["masks"], args.device)
+            lp, ent = sequence_logprob_entropy(
+                policy=policy, actions=e["actions"], masks=e["masks"], device=args.device
+            )
             loss = loss - a * lp - args.entropy * ent  # REINFORCE + 熵奖励
         (loss / len(eps)).backward()
         opt.step()
@@ -95,8 +100,13 @@ def main() -> None:
     records = []
     for expr in ranked:
         tree = rpn_to_node([env.vocab[a] for a in best_actions[expr]])
-        ic_tr = calc_ic_series(evaluate(tree, wide), env.fwd_train, method=method).dropna()
-        ic_te = calc_ic_series(evaluate(tree, wide), fwd_te, method=method).dropna()
+        ic_tr = calc_ic_series(
+            factor_df=evaluate(node=tree, wide=wide), return_df=env.fwd_train, method=method
+        ).dropna()
+        ic_te = calc_ic_series(
+            factor_df=evaluate(node=tree, wide=wide), return_df=fwd_te, method=method
+        ).dropna()
+
         records.append(
             {
                 "expr": expr,
@@ -113,9 +123,7 @@ def main() -> None:
         [{k: r[k] for k in ("expr", "size", "train_ic", "test_ic")} for r in records]
     ).to_csv(log_dir / "rl_factors.csv", index=False)
 
-    if len(records) >= 3:  # 顺手报训练→OOS 迁移（regime 成败的关键数）
-        from scipy.stats import spearmanr
-
+    if len(records) >= 3:  # 顺手报训练→OOS 迁移（regime 成败的关键数
         tr = [r["train_ic"] for r in records]
         te = [r["test_ic"] for r in records]
         logger.info(

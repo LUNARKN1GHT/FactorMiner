@@ -40,7 +40,15 @@ class Token:
 def build_vocab(
     terminals: list[str] | None = None, windows: tuple[int, ...] = TS_WINDOWS
 ) -> list[Token]:
-    """构造完整词表。顺序固定——策略网络的输出维度按此表顺序对齐"""
+    """构造完整词表。顺序固定——策略网络的输出维度按此表顺序对齐
+
+    Args:
+        terminals (list[str] | None, optional): 终端列表. Defaults to None.
+        windows (tuple[int, ...], optional): 算子窗口长度. Defaults to TS_WINDOWS.
+
+    Returns:
+        list[Token]: 构造出的完整词表
+    """
     terminals = terminals or CORE_TERMINALS
     vocab: list[Token] = []
 
@@ -85,6 +93,15 @@ def is_legal_next(token: Token, stack_depth: int, length: int, min_len: int) -> 
     """给定当前生长长度，判断这个 token 是否合法
 
     非法的 token 将在策略里呗压缩成 0 概率
+
+    Args:
+        token (Token): 输入的 token
+        stack_depth (int): 栈深度
+        length (int): 当前长度
+        min_len (int): 最小长度
+
+    Returns:
+        bool: 当前 token 是否合法
     """
     if token.kind == "terminal":
         return True
@@ -94,7 +111,18 @@ def is_legal_next(token: Token, stack_depth: int, length: int, min_len: int) -> 
 
 
 def rpn_to_node(tokens: list[Token]) -> Node:
-    """把一条 RPN token 序列构建成 Node 树。非法序列抛出 ValueError"""
+    """把一条 RPN token 序列构建成 Node 树。非法序列抛出 ValueError
+
+    Args:
+        tokens (list[Token]): tokens 序列
+
+    Raises:
+        ValueError: 操作数大于栈深度
+        ValueError: 结束时栈深不为 1
+
+    Returns:
+        Node: 判断当前 tokens 序列是否合法
+    """
     stack: list[Node] = []
     for token in tokens:
         if token.kind == "end":
