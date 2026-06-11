@@ -36,7 +36,7 @@ def evaluate(node: Node, wide: dict[str, pd.DataFrame]) -> pd.DataFrame:
     if node.is_leaf:
         return wide[node.value]
 
-    fn = _FUNCS[node.name]
+    fn = _FUNCS[node.name]  # type: ignore
 
     # 2. 时序算子：只有一个子树，窗口长度在 node.value 里
     if node.name in _TS_NAMES:

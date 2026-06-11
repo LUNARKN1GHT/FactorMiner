@@ -5,6 +5,8 @@
 - **强化学习挖因子（AlphaGen 范式）搭建**：转 RL 生成器——把因子表达式拆成后缀(RPN) token 序列，策略网络逐 token 生成，IC 当 reward。四文件 `src/rl/`：[`tokens.py`](../src/rl/tokens.py)（词表 46 + RPN↔Node + 合法性，语法层纯 Python）、[`env.py`](../src/rl/env.py)（gym 式 MDP，预算 mask 保证 `remaining≥栈深` 恒有合法动作，END 算同 regime 训练段 \|IC\| 奖励）、[`policy.py`](../src/rl/policy.py)（GRU 策略 + rollout + logprob/熵）、[`train_rl.py`](../src/rl/train_rl.py)（REINFORCE + 优势归一化 + 熵奖励，top 因子补 test_ic 存成 factor_library 同构 schema、直接喂 screen/deflated 闭环）。
 - **踩坑修复**：① `for name in "ts_corr"` 逐字符遍历造垃圾 token；② `kind=="kind"` END 判定写错致栈深 +1；③ **`float("-inf")` mask → NaN 梯度**（`0*-inf`，nan_to_num 只抹前向、反向仍 nan，污染权重几轮后崩）→ 改 `-1e9` + `clip_grad_norm_`。
 - **状态**：四件套齐全、各自自测绿、NaN 已修；正式冒烟待服务器 GPU 空闲（卡全满）。**尚无 IC 上升实测**。诚实限定：瓶颈在 CPU（奖励评估 pandas）非 GPU、REINFORCE v1（PPO 待升级）、成败仍看 regime rho。笔记 [`强化学习挖因子.md`](./强化学习挖因子.md)。
+- **顶层重构：抽出 core（分支 `refactor/extract-core`）**：多生成器（GP/RL/未来 LLM）都直接 import `src.gp` 的味道——诊断为「共享核被错放在 gp 下」。把 `tree(Node)/operators/evaluator` 三件套 `git mv` 到 [`src/core/`](../src/core/)（中立核），GP/RL/fitness/全 scripts 共 24 处 import 改向 core。验证：无残留、全编译、ruff 全过、依赖链通（仅本地缺 torch/joblib，服务器无碍）。确立**三层 + 两契约**架构（生成器平级只依赖 core+data、互不依赖；因子=`Node`、产出=`factor_library` schema、消费者只认 schema），写成 [`顶层设计.md`](./顶层设计.md) 作为加新生成器的北极星。刻意不做：抽象基类/注册表（未到 rule of three）、统一 walkforward 旧 schema、`src/generators/` 子目录。
+- 待办：服务器冒烟（GP 一轮 + RL 一轮）确认 import 改向无误 → 合并回 develop。
 
 ## 2026-06-10
 
