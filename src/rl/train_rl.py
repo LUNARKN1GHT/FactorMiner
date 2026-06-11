@@ -72,6 +72,7 @@ def main() -> None:
             )
             loss = loss - a * lp - args.entropy * ent  # REINFORCE + 熵奖励
         (loss / len(eps)).backward()
+        torch.nn.utils.clip_grad_norm_(policy.parameters(), 5.0)
         opt.step()
 
         for e in eps:  # 记历史最优（去重）

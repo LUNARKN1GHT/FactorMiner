@@ -14,6 +14,9 @@ import torch.nn as nn
 
 from src.rl.env import FactorEnv
 
+NEG_INF = -1e9
+"""大负数"""
+
 
 class FactorPolicy(nn.Module):
     """逐 token 生成因子的自回归策略。"""
@@ -81,7 +84,7 @@ def rollout(policy: FactorPolicy, env: FactorEnv, device: str) -> dict:
         logits, h = policy(prev, h)  # (1,1,V)
         m = env.legal_mask()
         mt = torch.from_numpy(m).to(device).unsqueeze(0)  # (1,V)
-        logits = logits[:, -1].masked_fill(~mt, float("-inf"))  # (1,V)
+        logits = logits[:, -1].masked_fill(~mt, NEG_INF)  # (1,V)
         a = torch.distributions.Categorical(logits=logits).sample()
         ai = int(a)
         actions.append(ai)
@@ -116,7 +119,7 @@ def sequence_logprob_entropy(
     logits, _ = policy(inp)  # (1,T,V)
     logits = logits[0]  # (T,V)
     mt = torch.from_numpy(masks).to(device)  # (T,V) bool
-    logits = logits.masked_fill(~mt, float("-inf"))
+    logits = logits.masked_fill(~mt, NEG_INF)
     logp = torch.log_softmax(logits, dim=-1)  # (T,V)
     act = torch.tensor(actions, device=device)
     chosen = logp[torch.arange(t_len), act]  # (T,) 被选动作的 logprob
