@@ -1,5 +1,11 @@
 # TIMELINE
 
+## 2026-06-11
+
+- **强化学习挖因子（AlphaGen 范式）搭建**：转 RL 生成器——把因子表达式拆成后缀(RPN) token 序列，策略网络逐 token 生成，IC 当 reward。四文件 `src/rl/`：[`tokens.py`](../src/rl/tokens.py)（词表 46 + RPN↔Node + 合法性，语法层纯 Python）、[`env.py`](../src/rl/env.py)（gym 式 MDP，预算 mask 保证 `remaining≥栈深` 恒有合法动作，END 算同 regime 训练段 \|IC\| 奖励）、[`policy.py`](../src/rl/policy.py)（GRU 策略 + rollout + logprob/熵）、[`train_rl.py`](../src/rl/train_rl.py)（REINFORCE + 优势归一化 + 熵奖励，top 因子补 test_ic 存成 factor_library 同构 schema、直接喂 screen/deflated 闭环）。
+- **踩坑修复**：① `for name in "ts_corr"` 逐字符遍历造垃圾 token；② `kind=="kind"` END 判定写错致栈深 +1；③ **`float("-inf")` mask → NaN 梯度**（`0*-inf`，nan_to_num 只抹前向、反向仍 nan，污染权重几轮后崩）→ 改 `-1e9` + `clip_grad_norm_`。
+- **状态**：四件套齐全、各自自测绿、NaN 已修；正式冒烟待服务器 GPU 空闲（卡全满）。**尚无 IC 上升实测**。诚实限定：瓶颈在 CPU（奖励评估 pandas）非 GPU、REINFORCE v1（PPO 待升级）、成败仍看 regime rho。笔记 [`强化学习挖因子.md`](./强化学习挖因子.md)。
+
 ## 2026-06-10
 
 - **因子动物园（生成/筛选解耦）**：按 mentor 方向重构——生成与筛选拆开。新增 [`generate_factors.py`](../scripts/generate_factors.py)（大批量生成树+去重+并行算 train/test **mean IC**，存 `factor_library.pkl`/`.csv`，指标改 IC 不用 ICIR）与 [`screen_factors.py`](../scripts/screen_factors.py)（按 |test IC| 取 top-K + 测试段回测）。脚本语法/依赖/签名已核验。纪律：测试集选 top = 选择偏差，winner 仍要过 deflated。这套是后续 RL 挖因子（PPO 换 GP、IC 当 reward）的底座。笔记 [`因子动物园.md`](./因子动物园.md)。
