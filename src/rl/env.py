@@ -10,8 +10,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from src.core.evaluator import evaluate
 from src.evaluation.metrics import calc_ic_series
-from src.gp.evaluator import evaluate
 from src.rl.tokens import Token, build_vocab, is_legal_next, rpn_to_node
 
 MIN_DISTINCT = 4

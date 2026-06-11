@@ -5,10 +5,10 @@ import sys
 import pandas as pd
 import yaml
 
+from src.core.evaluator import evaluate, to_wide
 from src.data.preprocess import to_panel
 from src.evaluation.metrics import calc_ic_series, calc_icir
 from src.gp.engine import GPConfig
-from src.gp.evaluator import evaluate, to_wide
 from src.gp.nsga2 import run_gp_nsga2
 from src.utils.logger import setup_experiment_logger
 

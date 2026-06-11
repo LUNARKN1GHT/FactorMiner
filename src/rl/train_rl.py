@@ -15,9 +15,9 @@ import torch
 import yaml
 from scipy.stats import spearmanr
 
+from src.core.evaluator import evaluate, to_wide
 from src.data.preprocess import to_panel
 from src.evaluation.metrics import calc_ic_series
-from src.gp.evaluator import evaluate, to_wide
 from src.rl.env import FactorEnv
 from src.rl.policy import FactorPolicy, rollout, sequence_logprob_entropy
 from src.rl.tokens import rpn_to_node

@@ -11,8 +11,8 @@ from pathlib import Path
 
 import numpy as np
 
-from src.gp.operators import BINARY_OPS, TS_BINARY_OPS, TS_OPS, UNARY_OPS
-from src.gp.tree import Node, collect_nodes
+from src.core.operators import BINARY_OPS, TS_BINARY_OPS, TS_OPS, UNARY_OPS
+from src.core.tree import Node, collect_nodes
 from src.utils.logger import log_generation
 
 

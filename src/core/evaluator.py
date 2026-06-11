@@ -2,8 +2,8 @@
 
 import pandas as pd
 
-from src.gp.operators import BINARY_OPS, TS_BINARY_OPS, TS_OPS, UNARY_OPS
-from src.gp.tree import Node
+from src.core.operators import BINARY_OPS, TS_BINARY_OPS, TS_OPS, UNARY_OPS
+from src.core.tree import Node
 
 
 def to_wide(prices: pd.DataFrame) -> dict[str, pd.DataFrame]:

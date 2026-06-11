@@ -16,9 +16,9 @@ import pandas as pd
 import yaml
 
 from src.backtest.simple import run_backtest
+from src.core.evaluator import evaluate, to_wide
 from src.data.preprocess import to_panel
 from src.evaluation.metrics import calc_ic_series
-from src.gp.evaluator import evaluate, to_wide
 
 
 def build_composite(folds: list, wide: dict) -> list:

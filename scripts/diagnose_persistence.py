@@ -10,10 +10,10 @@ import pandas as pd
 import yaml
 from joblib import Parallel, delayed
 
+from src.core.evaluator import evaluate, to_wide
+from src.core.tree import Node
 from src.data.preprocess import to_panel
 from src.evaluation.metrics import calc_ic_series
-from src.gp.evaluator import evaluate, to_wide
-from src.gp.tree import Node
 
 
 def year_ics(

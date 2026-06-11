@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from src.gp.tree import Node
+from src.core.tree import Node
 
 # 与数据对齐的核心终端
 CORE_TERMINALS = ["open", "high", "low", "close", "volume", "amount"]

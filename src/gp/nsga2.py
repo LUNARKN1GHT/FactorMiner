@@ -14,8 +14,8 @@ from pathlib import Path
 
 from joblib import Parallel, delayed
 
+from src.core.tree import Node
 from src.gp.engine import GPConfig, _within_limit, crossover, mutate, ramped_half_and_half
-from src.gp.tree import Node
 from src.utils.logger import log_generation
 
 # 一个个体的多目标向量

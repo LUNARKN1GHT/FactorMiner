@@ -5,9 +5,9 @@ from collections.abc import Callable
 import numpy as np
 import pandas as pd
 
+from src.core.evaluator import evaluate
+from src.core.tree import Node
 from src.evaluation.metrics import calc_ic_series, calc_icir
-from src.gp.evaluator import evaluate
-from src.gp.tree import Node
 
 
 def compute_forward_returns(close: pd.DataFrame, period: int = 5) -> pd.DataFrame:

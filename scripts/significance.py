@@ -13,9 +13,9 @@ import pandas as pd
 import yaml
 from scipy.stats import norm
 
+from src.core.evaluator import evaluate, to_wide
 from src.data.preprocess import to_panel
 from src.evaluation.metrics import calc_ic_series
-from src.gp.evaluator import evaluate, to_wide
 
 
 def newey_west_tstat(ic: pd.Series, horizon: int) -> tuple[float, float]:

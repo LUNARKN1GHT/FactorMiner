@@ -14,9 +14,9 @@ import yaml
 from scipy.stats import norm, spearmanr
 
 from src.backtest.simple import run_backtest
+from src.core.evaluator import evaluate, to_wide
 from src.data.preprocess import to_panel
 from src.evaluation.metrics import calc_ic_series
-from src.gp.evaluator import evaluate, to_wide
 
 GAMMA = 0.5772156649015329  # 欧拉–马歇罗尼常数
 

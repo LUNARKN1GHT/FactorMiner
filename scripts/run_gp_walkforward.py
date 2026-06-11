@@ -14,12 +14,12 @@ import numpy as np
 import pandas as pd
 import yaml
 
+from src.core.evaluator import evaluate, to_wide
+from src.core.tree import Node
 from src.data.preprocess import to_panel
 from src.evaluation.metrics import calc_ic_series, calc_icir
 from src.gp.engine import GPConfig
-from src.gp.evaluator import evaluate, to_wide
 from src.gp.nsga2 import run_gp_nsga2
-from src.gp.tree import Node
 from src.utils.logger import setup_experiment_logger
 
 MIN_DISTINCT = 4  # 截面不同取值的中位数下限

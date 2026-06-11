@@ -6,10 +6,10 @@ import sys
 import pandas as pd
 import yaml
 
+from src.core.evaluator import to_wide
 from src.data.preprocess import to_panel
 from src.evaluation.fitness import make_fitness
 from src.gp.engine import GPConfig, run_gp
-from src.gp.evaluator import to_wide
 from src.utils.logger import setup_experiment_logger
 
 

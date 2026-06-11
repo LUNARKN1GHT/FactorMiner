@@ -10,9 +10,9 @@ from __future__ import annotations
 import copy
 import random
 
+from src.core.operators import BINARY_OPS, TS_OPS, UNARY_OPS
+from src.core.tree import Node, collect_nodes
 from src.gp.engine import TERMINALS, TS_BINARY_OPS, TS_WINDOWS
-from src.gp.operators import BINARY_OPS, TS_OPS, UNARY_OPS
-from src.gp.tree import Node, collect_nodes
 
 TYPES = ("S", "R")
 
