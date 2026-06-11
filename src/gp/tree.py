@@ -10,7 +10,7 @@ from typing import Any
 class Node:
     """表达式树节点。"""
 
-    name: str
+    name: str | None
     """节点名称"""
 
     arity: int = 0
