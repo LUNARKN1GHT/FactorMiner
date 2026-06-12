@@ -32,6 +32,7 @@ class FactorEnv:
         terminals: list[str] | None = None,
         max_len: int = 20,
         min_len: int = 2,
+        parsimony: float = 0.0,
     ) -> None:
         """初始化因子生成环境。
 
@@ -47,6 +48,8 @@ class FactorEnv:
                 由 :func:`build_vocab` 使用默认列表。
             max_len (int): 序列最大 token 数（含 END），超出则强制终止。
             min_len (int): 合法 END 之前的最少有效 token 数。
+            parsimony (float): 简约惩罚系数，奖励 = |IC| − parsimony·树大小，
+                逼策略别靠 bloat 过拟合；0 = 不罚。
         """
         self.wide = wide
         # 奖励只在同 regime 训练段上计算
@@ -55,6 +58,7 @@ class FactorEnv:
         self.vocab: list[Token] = build_vocab(terminals=terminals)
         self.max_len = max_len
         self.min_len = min_len
+        self.parsimony = parsimony
         self.reset()
 
     @property
@@ -154,7 +158,9 @@ class FactorEnv:
         ic = calc_ic_series(fac, self.fwd_train, method=self.method).dropna()
         if len(ic) < 20:
             return 0.0, {"expr": str(tree), "reason": "too_few_ic"}
-        return float(abs(ic.mean())), {"expr": str(tree), "ic": float(ic.mean())}
+        # 奖励 = |IC| − parsimony·树大小：罚 bloat（可为负，REINFORCE 优势归一化能处理）
+        score = abs(ic.mean()) - self.parsimony * tree.size()
+        return float(score), {"expr": str(tree), "ic": float(ic.mean()), "size": tree.size()}
 
 
 if __name__ == "__main__":

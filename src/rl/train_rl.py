@@ -57,11 +57,13 @@ def main() -> None:
     train_end = pick(args.train_end, "train_end", "2023-01-01")
     topk = pick(args.topk, "topk", 0)
     n_jobs = pick(args.n_jobs, "n_jobs", 10)
+    parsimony = rl.get("parsimony", 0.0)  # 简约惩罚系数（罚 bloat 过拟合）
+    max_len = rl.get("max_len", 20)  # 表达式最大 token 数（硬卡树大小）
 
     logger, log_dir = setup_experiment_logger(tag="rl")
     logger.info(
-        "设备=%s | 训练段=[%s, %s) | iters=%d batch=%d lr=%g entropy=%g",
-        args.device, train_start, train_end, iters, batch, lr, entropy,
+        "设备=%s | 训练段=[%s, %s) | iters=%d batch=%d lr=%g entropy=%g parsimony=%g max_len=%d",
+        args.device, train_start, train_end, iters, batch, lr, entropy, parsimony, max_len,
     )
 
     prices = pd.read_parquet(cfg["data"].get("clean_path", "data/cache/prices_clean.parquet"))
@@ -71,7 +73,8 @@ def main() -> None:
     lo, hi = pd.Timestamp(train_start), pd.Timestamp(train_end)
 
     env = FactorEnv(
-        wide=wide, fwd=fwd, train_lo=lo, train_hi=hi, method=method, terminals=terminals
+        wide=wide, fwd=fwd, train_lo=lo, train_hi=hi, method=method, terminals=terminals,
+        max_len=max_len, parsimony=parsimony,
     )
     policy = FactorPolicy(vocab_size=env.vocab_size).to(device=args.device)
     opt = torch.optim.Adam(policy.parameters(), lr=lr)
@@ -95,16 +98,17 @@ def main() -> None:
         torch.nn.utils.clip_grad_norm_(policy.parameters(), 5.0)
         opt.step()
 
-        for e in eps:  # 记历史最优（去重；reward>0 才进，退化因子天然挡在外）
-            expr = e["info"].get("expr")
-            if expr and e["reward"] > best_reward.get(expr, 0.0):
+        for e in eps:  # 记历史最优（只记有效因子=算出了 IC 的；奖励含罚则、可为负）
+            info = e["info"]
+            expr = info.get("expr")
+            if info.get("ic") is not None and e["reward"] > best_reward.get(expr, float("-inf")):
                 best_reward[expr] = e["reward"]
                 best_actions[expr] = e["actions"]
 
         if it == 1 or it % 10 == 0:
             top_expr, top_r = max(best_reward.items(), key=lambda kv: kv[1])
             logger.info(
-                "iter %3d | 平均|IC|=%.4f 最大|IC|=%.4f 去重因子=%d | 历史最佳 %.4f  %s",
+                "iter %3d | 平均奖励=%.4f 最大奖励=%.4f 去重因子=%d | 历史最佳 %.4f  %s",
                 it, rewards.mean(), rewards.max(), len(best_reward), top_r, top_expr,
             )
 

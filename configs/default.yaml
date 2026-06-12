@@ -16,6 +16,8 @@ rl:                    # 强化学习挖因子（train_rl.py），命令行可�
   batch: 64
   lr: 0.001
   entropy: 0.01        # 熵奖励系数，防早熟
+  parsimony: 0.001     # 简约惩罚：奖励=|IC|−parsimony·树大小，罚 bloat 过拟合
+  max_len: 10          # 表达式最大 token 数，硬卡树大小（原 20 太容易 bloat）
   train_start: "2021-01-01"  # 训练段限在 2021+ regime 内（regime 断点教训）
   train_end: "2023-01-01"
   topk: 0              # 落盘因子数上限；0=全部探索到的都存
