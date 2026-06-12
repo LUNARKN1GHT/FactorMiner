@@ -11,6 +11,7 @@ gp:
   n_jobs: 10
 
 rl:                    # 强化学习挖因子·冒烟（小批跑通用）
+  seed: 42
   iters: 20
   batch: 16
   lr: 0.001

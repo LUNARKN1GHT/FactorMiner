@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import pickle
+import random
 
 import numpy as np
 import pandas as pd
@@ -59,11 +60,17 @@ def main() -> None:
     n_jobs = pick(args.n_jobs, "n_jobs", 10)
     parsimony = rl.get("parsimony", 0.0)  # 简约惩罚系数（罚 bloat 过拟合）
     max_len = rl.get("max_len", 20)  # 表达式最大 token 数（硬卡树大小）
+    seed = rl.get("seed", 42)  # 固定种子保可复现（baseline 必须）
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # CPU 时无副作用
 
     logger, log_dir = setup_experiment_logger(tag="rl")
     logger.info(
-        "设备=%s | 训练段=[%s, %s) | iters=%d batch=%d lr=%g entropy=%g parsimony=%g max_len=%d",
-        args.device, train_start, train_end, iters, batch, lr, entropy, parsimony, max_len,
+        "设备=%s seed=%d | 训练段=[%s, %s) | iters=%d batch=%d lr=%g entropy=%g parsimony=%g max_len=%d",
+        args.device, seed, train_start, train_end, iters, batch, lr, entropy, parsimony, max_len,
     )
 
     prices = pd.read_parquet(cfg["data"].get("clean_path", "data/cache/prices_clean.parquet"))

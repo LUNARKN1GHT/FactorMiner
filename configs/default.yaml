@@ -12,6 +12,7 @@ gp:
   n_jobs: 10
 
 rl:                    # 强化学习挖因子（train_rl.py），命令行可覆盖
+  seed: 42             # 固定种子保可复现（baseline 必须）
   iters: 300
   batch: 64
   lr: 0.001
