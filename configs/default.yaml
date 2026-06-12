@@ -11,6 +11,16 @@ gp:
   strongly_typed: true
   n_jobs: 10
 
+rl:                    # 强化学习挖因子（train_rl.py），命令行可覆盖
+  iters: 300
+  batch: 64
+  lr: 0.001
+  entropy: 0.01        # 熵奖励系数，防早熟
+  train_start: "2021-01-01"  # 训练段限在 2021+ regime 内（regime 断点教训）
+  train_end: "2023-01-01"
+  topk: 0              # 落盘因子数上限；0=全部探索到的都存
+  n_jobs: 10           # 落盘补算 test_ic 的并行核数
+
 data:
   start_date: "2018-01-01"
   end_date: "2023-12-31"

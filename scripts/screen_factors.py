@@ -112,7 +112,7 @@ def main() -> None:
     ic = calc_ic_series(evaluate(top["tree"], wide), fwd, method=method)
     ic_te = ic.loc[(ic.index >= split) & (ic.index < test_hi)].dropna()
     t = abs(nw_tstat(ic_te, horizon))
-    n_trials = len(factors)  # 试验数 = 库大小（从这么多个里挑了最强）
+    n_trials = lib.get("n_explored", len(factors))  # RL 库带真实探索数；GP 库退回库大小
     bar = expected_max_t(n_trials)
     p_def = float(1 - (1 - 2 * norm.sf(t)) ** n_trials)
     print(f"\n=== 第1名 deflated 盖章（库 N={n_trials} 次试验）===")
