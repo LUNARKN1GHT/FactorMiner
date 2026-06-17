@@ -20,6 +20,29 @@ from src.evaluation.metrics import calc_ic_series
 
 GAMMA = 0.5772156649015329  # 欧拉–马歇罗尼常数
 
+_PKL_NAMES = ("factor_library.pkl", "rl_factors.pkl")  # 各生成器落盘的 pkl 文件名
+
+
+def resolve_pkl(arg: str) -> str:
+    """arg 是现成 pkl 路径就直接用；否则当生成器 tag（llm/rl/gp…），取最新一次 run 的 pkl。
+
+    免得每次手敲 results/logs/exp_20260617_190222_llm/... 这种长时间戳路径。
+    """
+    p = Path(arg)
+    if p.is_file():
+        return str(p)
+    runs = sorted(Path("results/logs").glob(f"*_{arg}"))  # 时间戳命名，字典序即时间序
+    if not runs:
+        raise SystemExit(f"找不到 pkl，也没有 tag={arg} 的 run（results/logs/*_{arg}）")
+    latest = runs[-1]
+    for name in _PKL_NAMES:
+        if (latest / name).is_file():
+            return str(latest / name)
+    pkls = list(latest.glob("*.pkl"))
+    if not pkls:
+        raise SystemExit(f"{latest} 里没有 .pkl")
+    return str(pkls[0])
+
 
 def nw_tstat(ic: pd.Series, horizon: int) -> float:
     """重叠矫正后的 t 值（Bartlett 核，lag=horizon-1）。"""
@@ -70,6 +93,7 @@ def summarize(lib: dict, wide: dict, fwd: pd.DataFrame, method: str, horizon: in
 
 
 def main(paths: list[str], common_n: int | None) -> None:
+    paths = [resolve_pkl(a) for a in paths]  # 支持简写 tag（llm/rl/gp）→ 最新 run 的 pkl
     with open(paths[0], "rb") as fh:
         first = pickle.load(fh)
     with open(first["config_path"]) as f:
@@ -114,7 +138,9 @@ def main(paths: list[str], common_n: int | None) -> None:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("pkls", nargs="+", help="多个 factor_library schema 的 pkl 路径")
+    ap.add_argument(
+        "pkls", nargs="+", help="pkl 路径，或生成器 tag（llm/rl/gp）= 取最新一次 run 的 pkl"
+    )
     ap.add_argument("--n", type=int, default=None, help="统一 N 做 deflated 公平判定")
     args = ap.parse_args()
     main(args.pkls, args.n)
