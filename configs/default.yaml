@@ -11,29 +11,45 @@ gp:
   strongly_typed: true
   n_jobs: 10
 
-rl:                    # 强化学习挖因子（train_rl.py），命令行可覆盖
-  seed: 42             # 固定种子保可复现（baseline 必须）
+rl: # 强化学习挖因子（train_rl.py），命令行可覆盖
+  seed: 42 # 固定种子保可复现（baseline 必须）
   iters: 300
   batch: 64
   lr: 0.001
-  entropy: 0.01        # 熵奖励系数，防早熟
-  parsimony: 0.001     # 简约惩罚：奖励=|IC|−parsimony·树大小，罚 bloat 过拟合
-  max_len: 10          # 表达式最大 token 数，硬卡树大小（原 20 太容易 bloat）
-  train_start: "2021-01-01"  # 训练段限在 2021+ regime 内（regime 断点教训）
+  entropy: 0.01 # 熵奖励系数，防早熟
+  parsimony: 0.001 # 简约惩罚：奖励=|IC|−parsimony·树大小，罚 bloat 过拟合
+  max_len: 10 # 表达式最大 token 数，硬卡树大小（原 20 太容易 bloat）
+  train_start: "2021-01-01" # 训练段限在 2021+ regime 内（regime 断点教训）
   train_end: "2023-01-01"
-  topk: 0              # 落盘因子数上限；0=全部探索到的都存
-  n_jobs: 10           # 落盘补算 test_ic 的并行核数
+  topk: 0 # 落盘因子数上限；0=全部探索到的都存
+  n_jobs: 10 # 落盘补算 test_ic 的并行核数
 
 data:
   start_date: "2018-01-01"
   end_date: "2023-12-31"
-  universe: "hs300"  # 沪深300成分股
+  universe: "hs300" # 沪深300成分股
 
 evaluation:
-  ic_method: "rank"  # rank IC (Spearman)
-  n_groups: 5        # 分组回测的组数
+  ic_method: "rank" # rank IC (Spearman)
+  n_groups: 5 # 分组回测的组数
   parsimony: 0.002 # 简约惩罚系数
 
 backtest:
-  holding_period: 5  # 持仓天数
-  commission: 0.001  # 手续费率
+  holding_period: 5 # 持仓天数
+  commission: 0.001 # 手续费率
+
+llm: # LLM 进化挖掘因子
+  model_a: "deepseek-v4-pro" # 操作员：生成 / 进化
+  model_b: "deepseek-v4-pro" # 评论家：诊断因子
+  rounds: 10 # 最大进化轮数
+  n_per_round: 50 # 每轮让 A 提多少因子
+  patience: 3 # 连续无提升轮数 -> 早停
+  critic_every: 1 # B 调用频率：1=每轮；设大可省钱（只在该频率轮调 B）
+  temperature: 1.0
+  max_operators: 10 # 清洗：算子数上限，防 bloat
+  parsimony: 0.001 # train_score=|train_ic|−parsimony·size，沿用 RL
+  archive_size: 10 # 回灌给 A 的精英范例数
+  train_start: "2021-01-01" # 训练段限在 2021+ regime 内
+  train_end: "2023-01-01" # 留 2023 全年做 OOS test（同 rl: 段，别占满到年底）
+  topk: 0 # 落盘上限，0 = 全存
+  n_jobs: 10

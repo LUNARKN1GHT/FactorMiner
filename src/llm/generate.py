@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 from src.core.tree import Node
+from src.llm.clean import canon_key
 from src.llm.parser import CORE_TERMINALS, ParseError, parse
 from src.llm.prompts import load_prompt
 
@@ -37,13 +38,47 @@ def _default_client() -> OpenAI:
     )
 
 
-def _canon_key(node: Node) -> str:
-    """递归规范化键：带上时序窗口，避免不同窗口被误判重复。"""
-    if not node.children:
-        return node.name  # type: ignore
-    inner = ",".join(_canon_key(c) for c in node.children)
-    w = "" if node.value is None else f"@{node.value}"
-    return f"{node.name}{w}({inner})"
+def call_llm(
+    prompt: str,
+    *,
+    model: str = MODEL,
+    client: OpenAI | None = None,
+    temperature: float = 1.0,
+    max_tokens: int = 16000,
+) -> str:
+    """发一条 prompt，返回原始文本"""
+    client = client or _default_client()
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=max_tokens,
+        temperature=temperature,
+    )
+    return resp.choices[0].message.content or ""
+
+
+def parse_response(
+    text: str,
+    terminals: tuple[str, ...] = CORE_TERMINALS,
+    *,
+    logger: logging.Logger | None = None,
+) -> list[Node]:
+    """LLM 原始文本逐行解析成 Node，非法行跳过。不去重——去重交给 clean。"""
+    log = logger or _log
+    trees: list[Node] = []
+    n_raw = 0
+    for raw in text.splitlines():
+        line = raw.strip().strip("`").strip()
+        line = re.sub(r"^\s*(\d+[.)]|[-*])\s*", "", line)  # 去编号/项目符号
+        if not line:
+            continue
+        n_raw += 1
+        try:
+            trees.append(parse(line, terminals))
+        except ParseError as e:
+            log.debug("解析失败跳过: %s (%s)", line, e)
+    log.info("LLM 提取: raw=%d parsed=%d", n_raw, len(trees))
+    return trees
 
 
 def generate_trees(
@@ -52,40 +87,18 @@ def generate_trees(
     model: str = MODEL,
     terminals: tuple[str, ...] = CORE_TERMINALS,
     client: OpenAI | None = None,
-    temperature: float = 1.0,  # 调高些促多样性,
+    temperature: float = 1.0,
     logger: logging.Logger | None = None,
 ) -> list[Node]:
-    """单次调用 LLM 提 n 个因子，解析成 Node（非法/重复跳过）。"""
-    log = logger or _log
-    client = client or _default_client()
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": build_prompt(n, terminals)}],
-        max_tokens=16000,
-        temperature=temperature,
-    )
-    text = resp.choices[0].message.content or ""
-
-    trees: list[Node] = []
+    """单次调用（冷启 prompt）提 n 个因子，解析+去重——standalone / 单测用。"""
+    text = call_llm(build_prompt(n, terminals), model=model, client=client, temperature=temperature)
     seen: set[str] = set()
-    n_raw = n_parsed = 0
-    for raw in text.splitlines():
-        line = raw.strip().strip("`").strip()
-        line = re.sub(r"^\s*(\d+[.)]|[-*])\s*", "", line)  # 去掉可能的编号/项目符号
-        if not line:
-            continue
-        n_raw += 1
-        try:
-            tree = parse(line, terminals)
-        except ParseError as e:
-            log.debug("解析失败跳过: %s (%s)", line, e)  # 调 prompt 时开 DEBUG 看 LLM 犯啥错
-            continue
-        n_parsed += 1
-        if (k := _canon_key(tree)) not in seen:
+    out: list[Node] = []
+    for t in parse_response(text, terminals, logger=logger):
+        if (k := canon_key(t)) not in seen:
             seen.add(k)
-            trees.append(tree)
-    log.info("LLM 提取: raw=%d parsed=%d unique=%d", n_raw, n_parsed, len(trees))
-    return trees
+            out.append(t)
+    return out
 
 
 if __name__ == "__main__":
