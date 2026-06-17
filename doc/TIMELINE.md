@@ -1,5 +1,14 @@
 # TIMELINE
 
+## 2026-06-17
+
+- **LLM 进化挖因子（操作员-评论家）= 第三个生成器**：沿 mentor「神经符号 / LLM 辅助生成」终点方向，继 GP/RL 后落地。新增 `src/llm/`：[`parser.py`](../src/llm/parser.py)（函数式文本→Node，按 core 算子注册表校验元数/窗口）、[`generate.py`](../src/llm/generate.py)（操作员 A，DeepSeek OpenAI 兼容接口，`call_llm`+`parse_response`+`generate_trees`）、[`clean.py`](../src/llm/clean.py)（清洗：算子数上限 + `canon_key` 跨轮去重 + `to_expr` 可解析渲染）、[`critic.py`](../src/llm/critic.py)（评论家 B，**只诊断不打分**）、[`prompts.py`](../src/llm/prompts.py)（`string.Template` 加载 `prompts/` 下三套提示词）、[`usage.py`](../src/llm/usage.py)（token/金额累加）。主循环 [`run_llm.py`](../scripts/run_llm.py)：A 生成→清洗→**只对新因子在 TRAIN 段求值**→archive（按 `|train_ic|−parsimony·size`）→B 诊断→回灌下一轮，patience 早停、全量 prompt/response 留痕、落 `factor_library` 同构 schema。
+- **设计哲学（写进 [`LLM进化挖因子.md`](./LLM进化挖因子.md)）**：① 名义「操作员-评论家」但**无参数训练**、学习全在 in-context——本质是 **LLM 进化搜索（FunSearch/Reflexion）**，别去实现梯度/价值函数。② **铁律：搜索回路只看 train，`test_ic` 仅最终落盘算一次、永不进回路**（否则等于偷看测试集 N 轮、与 GP/RL 对比作废）。③ 选择（谁进 archive）交硬指标，B 只产出数字给不了的定性诊断 + 下轮指令。
+- **踩坑修复**：① **`canon_key` 的 `@窗口` 记法被当 expr 喂回 A → A 照抄 → round 2 解析率暴跌 5/50**；根因是「去重身份串」与「展示串」混用，修法分离 `canon_key`（带 `@`，仅内部去重）与 `to_expr`（函数式 `ts_max(high,20)`，可被 parse 往返，对外/喂 LLM 一律用它）。② 读 config 裸 `open` 缺 `encoding="utf-8"`（非 UTF-8 locale 会崩）。③ pickle/json 复用同名句柄 `fh` → mypy 类型冲突，改名隔离。
+- **工程**：DeepSeek 走 `.env`（`DEEPSEEK_API_KEY`/`BASE_URL`）；每次实验记 token/金额落 `usage.json`（`price_in/out` 配；首跑 ¥0.24）。[`compare_generators.py`](../scripts/compare_generators.py) 加 **tag 简写解析**（`llm`/`rl`/`gp` → 最新 run 的 pkl，免敲长时间戳）+ **factor_library schema 校验**（剔除 GP walkforward 等异类）。
+- **首次实验 + 横向对比收口**（run `exp_20260617_190222_llm`）：7 轮早停、探索 314。**winner `scale(mul(close,decay_linear(volume,5)))` 过 deflated**：测试段 `|NW_t|=4.09 > E[max t]@314=2.91`、`p=0.0134`、OOS 多头 T+1 夏普 0.92/年化 +5.87%（含 10bp），全库 rho **+0.718**。**统一最严 N=7262（门槛 3.78）下 LLM 是唯一过 deflated 的生成器**（4.09 ✓ vs RL 2.58 ✗ vs zoo 1.01 ✗），且 size 6.3 最简、搜索量仅 RL 的 1/23。两条结论：**deflated 税再次坐实（RL 搜 23× 反双重失败）；但三者 ceiling 都在 0.03~0.067、收敛同一 amount 天花板家族——LLM 没破价量，只是更高效、OOS 更干净**。
+- 待办：破天花板需接价量正交的**金融文本/基本面**（数据获取未解决）；正确的 N=1730 within-regime 随机动物园库本机暂缺、待重建以做对照。
+
 ## 2026-06-11
 
 - **强化学习挖因子（AlphaGen 范式）搭建**：转 RL 生成器——把因子表达式拆成后缀(RPN) token 序列，策略网络逐 token 生成，IC 当 reward。四文件 `src/rl/`：[`tokens.py`](../src/rl/tokens.py)（词表 46 + RPN↔Node + 合法性，语法层纯 Python）、[`env.py`](../src/rl/env.py)（gym 式 MDP，预算 mask 保证 `remaining≥栈深` 恒有合法动作，END 算同 regime 训练段 \|IC\| 奖励）、[`policy.py`](../src/rl/policy.py)（GRU 策略 + rollout + logprob/熵）、[`train_rl.py`](../src/rl/train_rl.py)（REINFORCE + 优势归一化 + 熵奖励，top 因子补 test_ic 存成 factor_library 同构 schema、直接喂 screen/deflated 闭环）。
