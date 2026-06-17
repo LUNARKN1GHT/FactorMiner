@@ -21,7 +21,7 @@ from joblib import Parallel, delayed
 from src.core.evaluator import evaluate, to_wide
 from src.data.preprocess import to_panel
 from src.evaluation.metrics import calc_ic_series
-from src.llm.clean import canon_key, clean
+from src.llm.clean import clean, to_expr
 from src.llm.critic import critique
 from src.llm.generate import call_llm, parse_response
 from src.llm.parser import CORE_TERMINALS
@@ -45,7 +45,7 @@ def main() -> None:
     ap.add_argument("--n-per-round", type=int)
     args = ap.parse_args()
 
-    with open(args.config) as f:
+    with open(args.config, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
     method = cfg["evaluation"]["ic_method"]
     llm = cfg.get("llm", {})
@@ -147,9 +147,9 @@ def main() -> None:
         for t in new:
             ic = train_ic_of(t)
             if math.isnan(ic):
-                avoid.append(canon_key(t))
+                avoid.append(to_expr(t))
                 continue
-            results.append({"expr": canon_key(t), "tree": t, "size": t.size(), "train_ic": ic})
+            results.append({"expr": to_expr(t), "tree": t, "size": t.size(), "train_ic": ic})
         explored.extend(results)
 
         archive = sorted(archive + results, key=score, reverse=True)[:archive_size]
@@ -226,8 +226,8 @@ def main() -> None:
         len(seen),
     )
 
-    with open(log_dir / "usage.json", "w", encoding="utf-8") as fh:
-        json.dump(usage.as_dict(price_in, price_out), fh, ensure_ascii=False, indent=2)
+    with open(log_dir / "usage.json", "w", encoding="utf-8") as uf:
+        json.dump(usage.as_dict(price_in, price_out), uf, ensure_ascii=False, indent=2)
     logger.info(
         "本次实验 LLM 用量：%d 次调用 | %d tokens（in %d / out %d）| 估算 ¥%.4f",
         usage.calls,

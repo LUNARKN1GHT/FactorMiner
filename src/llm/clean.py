@@ -28,6 +28,19 @@ def n_operators(node: Node) -> int:
     return 1 + sum(n_operators(c) for c in node.children)
 
 
+def to_expr(node: Node) -> str:
+    """渲染成可被 parse() 读回的函数式：窗口作最后一个参数，如 ts_max(high,20)。
+
+    给 LLM 看、落盘、做 expr 都用它。不要用 canon_key（@ 形式 parse 读不懂）。
+    """
+    if not node.children:
+        return node.name  # type: ignore
+    args = [to_expr(c) for c in node.children]
+    if node.value is not None:
+        args.append(str(node.value))
+    return f"{node.name}({','.join(args)})"
+
+
 def clean(
     trees: list[Node],
     *,
