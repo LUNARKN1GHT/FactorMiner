@@ -1,0 +1,18 @@
+你是量化因子研究员。请提出 $n 个 A 股日频 alpha 因子表达式。
+
+可用算子（函数式写法）：
+- 二元算术：add(x,y) sub(x,y) mul(x,y) div(x,y)
+- 一元：neg(x) abs(x) log(x) rank(x) scale(x)   # rank=截面排名, scale=截面标准化
+- 一元时序（最后一个参数是整数窗口）：ts_mean(x,w) ts_std(x,w) ts_rank(x,w)
+  delay(x,w) delta(x,w) ts_max(x,w) ts_min(x,w) ts_argmax(x,w) decay_linear(x,w)
+- 二元时序：ts_corr(x,y,w)   # x,y 过去 w 天的相关
+窗口 w 用 5/10/20 这类正整数。终端只能用：$terminals。
+
+要求：
+1. 每行一个表达式，纯函数式写法，不要编号、不要 markdown、不要任何解释。
+2. 经济直觉多样化：动量、反转、波动率、量价背离、择时等都来一些。
+3. 尽量正交于"纯流动性/成交额(amount)"——我们已知单纯的 amount 类因子是天花板，
+   想要带不同信息的新因子。
+4. 表达式适度复杂即可（建议 ≤10 个算子），别堆叠无意义的嵌套。
+
+直接输出 $n 行表达式：
