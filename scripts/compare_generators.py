@@ -23,25 +23,37 @@ GAMMA = 0.5772156649015329  # 欧拉–马歇罗尼常数
 _PKL_NAMES = ("factor_library.pkl", "rl_factors.pkl")  # 各生成器落盘的 pkl 文件名
 
 
+def _is_library(path: Path) -> bool:
+    """是不是 factor_library schema（dict 含 factors/config_path）。GP walkforward / 纯 list 不算。"""
+    try:
+        with open(path, "rb") as fh:
+            obj = pickle.load(fh)
+    except Exception:
+        return False
+    return isinstance(obj, dict) and "factors" in obj and "config_path" in obj
+
+
 def resolve_pkl(arg: str) -> str:
     """arg 是现成 pkl 路径就直接用；否则当生成器 tag（llm/rl/gp…），取最新一次 run 的 pkl。
 
     免得每次手敲 results/logs/exp_20260617_190222_llm/... 这种长时间戳路径。
+    只认 factor_library schema 的 pkl，不兼容的（如 GP walkforward {folds,picks}）会明确报错。
     """
     p = Path(arg)
     if p.is_file():
+        if not _is_library(p):
+            raise SystemExit(f"{p} 不是 factor_library schema（dict 含 factors/config_path），不兼容对比")
         return str(p)
     runs = sorted(Path("results/logs").glob(f"*_{arg}"))  # 时间戳命名，字典序即时间序
     if not runs:
         raise SystemExit(f"找不到 pkl，也没有 tag={arg} 的 run（results/logs/*_{arg}）")
     latest = runs[-1]
-    for name in _PKL_NAMES:
-        if (latest / name).is_file():
-            return str(latest / name)
-    pkls = list(latest.glob("*.pkl"))
-    if not pkls:
-        raise SystemExit(f"{latest} 里没有 .pkl")
-    return str(pkls[0])
+    candidates = [latest / n for n in _PKL_NAMES if (latest / n).is_file()]
+    candidates += [q for q in sorted(latest.glob("*.pkl")) if q not in candidates]
+    for q in candidates:
+        if _is_library(q):
+            return str(q)
+    raise SystemExit(f"{latest} 里没有 factor_library schema 的 pkl（tag={arg} 不兼容对比）")
 
 
 def nw_tstat(ic: pd.Series, horizon: int) -> float:
@@ -93,7 +105,10 @@ def summarize(lib: dict, wide: dict, fwd: pd.DataFrame, method: str, horizon: in
 
 
 def main(paths: list[str], common_n: int | None) -> None:
+    raw = paths
     paths = [resolve_pkl(a) for a in paths]  # 支持简写 tag（llm/rl/gp）→ 最新 run 的 pkl
+    for a, q in zip(raw, paths, strict=True):
+        print(f"解析: {a} → {q}")
     with open(paths[0], "rb") as fh:
         first = pickle.load(fh)
     with open(first["config_path"]) as f:
