@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import pickle
 
@@ -25,6 +26,7 @@ from src.llm.critic import critique
 from src.llm.generate import call_llm, parse_response
 from src.llm.parser import CORE_TERMINALS
 from src.llm.prompts import load_prompt
+from src.llm.usage import Usage
 from src.utils.logger import log_generation, setup_experiment_logger
 
 
@@ -67,6 +69,8 @@ def main() -> None:
     n_jobs = llm.get("n_jobs", 10)
     model_a = llm.get("model_a", "deepseek-v4-pro")
     model_b = llm.get("model_b", "deepseek-v4-pro")
+    price_in = llm.get("price_in", 0.0)  # 每百万 token 单价（估算金额用）
+    price_out = llm.get("price_out", 0.0)
 
     logger, log_dir = setup_experiment_logger(tag="llm")
     logger.info(
@@ -109,6 +113,7 @@ def main() -> None:
     critique_text: str = ""
     best: float = float("-inf")  # 最好的 ic
     no_improve: int = 0  # 没有进化的轮数
+    usage = Usage()  # 累计本次实验的 token / 金额
 
     for r in range(1, rounds + 1):
         rd = log_dir / "rounds" / f"round_{r:02d}"
@@ -128,7 +133,7 @@ def main() -> None:
                 avoid="\n".join(avoid[-30:]) or "（暂无）",
                 critique=critique_text or "（暂无）",
             )
-        text = call_llm(prompt, model=model_a, temperature=temperature)
+        text = call_llm(prompt, model=model_a, temperature=temperature, usage=usage)
         (rd / "prompt_a.txt").write_text(prompt, encoding="utf-8")
         (rd / "response_a.txt").write_text(text, encoding="utf-8")
 
@@ -151,7 +156,7 @@ def main() -> None:
 
         if results and r % critic_every == 0:
             # 模型 B 诊断
-            critique_text = critique(results, archive, model=model_b, logger=logger)
+            critique_text = critique(results, archive, model=model_b, logger=logger, usage=usage)
             (rd / "response_b.txt").write_text(critique_text, encoding="utf-8")
 
         round_best = max((score(x) for x in results), default=float("-inf"))
@@ -219,6 +224,17 @@ def main() -> None:
         log_dir / "factor_library.pkl",
         len(records),
         len(seen),
+    )
+
+    with open(log_dir / "usage.json", "w", encoding="utf-8") as fh:
+        json.dump(usage.as_dict(price_in, price_out), fh, ensure_ascii=False, indent=2)
+    logger.info(
+        "本次实验 LLM 用量：%d 次调用 | %d tokens（in %d / out %d）| 估算 ¥%.4f",
+        usage.calls,
+        usage.total_tokens,
+        usage.prompt_tokens,
+        usage.completion_tokens,
+        usage.cost(price_in, price_out),
     )
 
 

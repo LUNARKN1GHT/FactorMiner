@@ -53,3 +53,5 @@ llm: # LLM 进化挖掘因子
   train_end: "2023-01-01" # 留 2023 全年做 OOS test（同 rl: 段，别占满到年底）
   topk: 0 # 落盘上限，0 = 全存
   n_jobs: 10
+  price_in: 0.025 # 每百万 input token 单价（估算金额用，按实际计费填）
+  price_out: 6.0 # 每百万 output token 单价

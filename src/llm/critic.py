@@ -12,6 +12,7 @@ from openai import OpenAI
 
 from src.llm.generate import MODEL, _default_client
 from src.llm.prompts import load_prompt
+from src.llm.usage import Usage
 
 _log = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ def critique(
     model: str = MODEL,
     client: OpenAI | None = None,
     logger: logging.Logger | None = None,
+    usage: Usage | None = None,
 ) -> str:
     """调 LLM B，返回诊断文本（三段：整体问题 / 值得深挖 / 下轮指令）。"""
     log = logger or _log
@@ -45,6 +47,8 @@ def critique(
         max_tokens=2000,
         temperature=0.3,  # 诊断需要更冷静的内容
     )
+    if usage is not None:
+        usage.add(resp.usage)
     text = (resp.choices[0].message.content or "").strip()
     log.info("LLM B 诊断 %d 字", len(text))
     return text

@@ -19,6 +19,7 @@ from src.core.tree import Node
 from src.llm.clean import canon_key
 from src.llm.parser import CORE_TERMINALS, ParseError, parse
 from src.llm.prompts import load_prompt
+from src.llm.usage import Usage
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")  # 同 loader.py：导入即加载 .env
 _log = logging.getLogger(__name__)
@@ -45,6 +46,7 @@ def call_llm(
     client: OpenAI | None = None,
     temperature: float = 1.0,
     max_tokens: int = 16000,
+    usage: Usage | None = None,
 ) -> str:
     """发一条 prompt，返回原始文本"""
     client = client or _default_client()
@@ -54,6 +56,8 @@ def call_llm(
         max_tokens=max_tokens,
         temperature=temperature,
     )
+    if usage is not None:
+        usage.add(resp.usage)
     return resp.choices[0].message.content or ""
 
 
