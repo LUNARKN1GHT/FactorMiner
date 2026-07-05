@@ -89,7 +89,7 @@ def delta(x: pd.DataFrame, period: int) -> pd.DataFrame:
 
 def ts_max(x: pd.DataFrame, window: int) -> pd.DataFrame:
     """滚动窗口内最大值"""
-    return x.rolling(window=window, min_periods=1).min()
+    return x.rolling(window=window, min_periods=1).max()
 
 
 def ts_min(x: pd.DataFrame, window: int) -> pd.DataFrame:
