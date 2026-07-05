@@ -1,5 +1,35 @@
 # TIMELINE
 
+## 2026-07-04
+
+- **mentor 新方向：文献复现 → 论文起点**。mentor 要求先调研现有因子挖掘方法、挑几个复现，
+  作为论文的起点，后续再谈改进。调研落地为两个**发表过的** RL 系 baseline，都跟自研 GP/RL/LLM
+  三生成器（见 [强化学习挖因子](./强化学习挖因子.md)、[LLM进化挖因子](./LLM进化挖因子.md)）放
+  一起横向对比，同时刻意排除新的 LLM 系论文（temperature 不可复现 + API 不确定性太大，不利于
+  "复现"这个目标）。
+- **QuantFactor REINFORCE（arXiv:2409.05144，无官方代码，照论文公式实现）**：新增
+  `src/rl/alpha_pool.py`（因子池，梯度下降拟合线性组合权重）、`src/rl/pool_env.py`（组合 IC +
+  IR 时变阈值塑形奖励）、`policy.py::greedy_rollout`（贪婪解码，供贪婪基线用）、
+  `scripts/run_quantfactor.py`（每 episode 双轨迹：采样+贪婪，advantage=两者 reward 差，不再用
+  batch 内归一化）。本机合成数据冒烟跑通，`compare_generators.py` 打通。笔记
+  [QuantFactorREINFORCE复现.md](./QuantFactorREINFORCE复现.md)。
+- **AlphaGen（KDD 2023，官方仓库 RL-MLDM/alphagen，走真跑代码路径）**：clone 到
+  `baselines/alphagen/`（不进 `src/`，外部产物不算生成器）。本机 macOS arm64 装官方
+  `requirements.txt` 踩坑——`numpy==1.20.1` 等老版本无 arm64 wheel + 新版 setuptools 缺
+  `pkg_resources`，装不上；放宽版本装出独立环境 `alphagen-repro`（仅本机验证代码/环境用，
+  服务器 Linux+CUDA 应直接用官方原始锁定版本）。新增 `src/rl/alphagen_bridge.py`（表达式字符串
+  →`Node` 翻译器，算子映射表 + 不可翻译判定）与 `scripts/bridge_alphagen.py`（因子池 json → 自己
+  数据重新算 IC → factor_library.pkl），假数据验证链路通。**真实训练数据在实验室服务器上，本次
+  只做到环境验证+桥接管线就绪，正式跑通与结果留给服务器**（README 写了跑法）。笔记
+  [AlphaGen复现.md](./AlphaGen复现.md)。
+- **顺手修的两个既有 bug**：① `src/core/operators.py::ts_max` 实际调用的是 `.rolling().min()`
+  （应为 `.max()`，copy-paste 遗留），影响所有历史生成器，已修。② 发现 `Node.__str__`
+  （`src/core/tree.py`）不显示时序窗口，会把不同窗口的因子（如 `ts_mean(close,5)` 和
+  `ts_mean(close,20)`）误判成同一个 dedup key——`src/llm/clean.py` 早前已踩过这个坑并修过
+  （`to_expr`），但 `train_rl.py`/`generate_factors.py` 目前仍是裸 `str(tree)`，同样风险仍在，
+  这次只在新写的 `pool_env.py` 里避坑（本地 `_to_expr`，不跨生成器 import），没有回头改旧代码，
+  如实记录、留给后续判断要不要修。
+
 ## 2026-06-11
 
 - **强化学习挖因子（AlphaGen 范式）搭建**：转 RL 生成器——把因子表达式拆成后缀(RPN) token 序列，策略网络逐 token 生成，IC 当 reward。四文件 `src/rl/`：[`tokens.py`](../src/rl/tokens.py)（词表 46 + RPN↔Node + 合法性，语法层纯 Python）、[`env.py`](../src/rl/env.py)（gym 式 MDP，预算 mask 保证 `remaining≥栈深` 恒有合法动作，END 算同 regime 训练段 \|IC\| 奖励）、[`policy.py`](../src/rl/policy.py)（GRU 策略 + rollout + logprob/熵）、[`train_rl.py`](../src/rl/train_rl.py)（REINFORCE + 优势归一化 + 熵奖励，top 因子补 test_ic 存成 factor_library 同构 schema、直接喂 screen/deflated 闭环）。

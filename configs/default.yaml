@@ -24,6 +24,25 @@ rl: # 强化学习挖因子（train_rl.py），命令行可覆盖
   topk: 0 # 落盘因子数上限；0=全部探索到的都存
   n_jobs: 10 # 落盘补算 test_ic 的并行核数
 
+quantfactor: # QuantFactor REINFORCE 复现（run_quantfactor.py），贪婪基线+因子池+IR塑形
+  seed: 42
+  iters: 300
+  batch: 32 # 每轮采样轨迹数；每条还配一条贪婪轨迹，实际 rollout = 2×batch
+  lr: 0.001
+  entropy: 0.01 # 熵奖励系数，防早熟
+  max_len: 10 # 表达式最大 token 数，跟 rl: 段一致
+  pool_capacity: 10 # 因子池容量，超出淘汰 |weight| 最小项
+  pool_lr: 0.05 # 池子线性组合权重的梯度下降学习率
+  pool_gd_steps: 200 # 每次候选入池后重新拟合的梯度下降步数
+  ir_alpha: 180000 # IR 阈值时变调度：threshold = clip[(step-ir_alpha)*ir_eta, 0, ir_delta]
+  ir_eta: 0.000001
+  ir_delta: 0.3
+  ir_lambda: 0.02 # 组合 IR 低于阈值时的奖励惩罚幅度
+  train_start: "2021-01-01" # 训练段限在 2021+ regime 内，跟 rl:/llm: 一致
+  train_end: "2023-01-01"
+  topk: 0 # 落盘因子数上限；0=全部探索到的都存
+  n_jobs: 10 # 落盘补算 test_ic 的并行核数
+
 data:
   start_date: "2018-01-01"
   end_date: "2023-12-31"
