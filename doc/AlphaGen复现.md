@@ -57,22 +57,32 @@ manylinux x86_64 上都有官方 wheel），没有必要用放宽版本，正式
      `~/.qlib/qlib_data/cn_data_baostock_fwdadj`。路径可改，但要跟
      `scripts/rl.py` 里 `initialize_qlib(...)` 传的路径对上。
    - 如果服务器上已有别人跑过的 CSI300 qlib 数据，直接确认路径、跳过这步。
-3. **跑训练前先挑空卡**：服务器是共享 H100（8 卡），先 `nvidia-smi` 看哪张卡显存/利用率是空的，
-   记下卡号。代码里 `device = torch.device("cuda:0")` 是写死的——不用改代码，用
-   `CUDA_VISIBLE_DEVICES` 把选中的物理卡重映射成进程眼里的 `cuda:0` 就行（跟之前 RL 挖因子
-   锁卡的做法一致）：
+3. **跑训练**：
+   - **GPU 空闲时**：`nvidia-smi` 看哪张卡空、记下卡号，用 `CUDA_VISIBLE_DEVICES` 锁卡
+     （跟之前 RL 挖因子锁卡的做法一致），代码里的 `device` 不用碰。
+   - **GPU 都被占用时（当前情况）**：`scripts/rl.py:194` 已经从 `torch.device("cuda:0")`
+     改成 `torch.device("cpu")`——这个改动是有依据的，不是将就：策略网络是个很小的
+     LSTM，真正耗时的是每步算因子 IC 那部分 pandas 计算，跟你们自己挖 RL 因子时的发现
+     一致（"RL 瓶颈在 CPU、非 GPU"），GPU 在这里加速有限，纯 CPU 应该跑得动。等哪天
+     GPU 又空出来了，把这行改回 `torch.device("cuda:0")` 配合 `CUDA_VISIBLE_DEVICES`
+     锁卡即可，两种模式随时切换。
+
+     代码里 `StockData`/`MseAlphaPool`/`AlphaEnv`/LSTM 特征提取器/`MaskablePPO` 构造时都
+     显式传了 `device=device`，没有漏传、没有依赖类定义里那些 cuda:0 默认值，逻辑上确认
+     不会碰 GPU。但不完全依赖"代码看得够仔细"，加一道硬保险——启动时带
+     `CUDA_VISIBLE_DEVICES=""`，让进程在驱动层面直接看不到任何 GPU，physically 摸不到，
+     不会跟别人的任务抢：
 
    ```bash
-   nvidia-smi   # 选一张空卡，假设选中物理卡 3
    cd baselines/alphagen
-   CUDA_VISIBLE_DEVICES=3 python -m scripts.rl --pool_capacity 10 --steps 5000   # 先冒烟：小规模，几分钟内出结果
-   CUDA_VISIBLE_DEVICES=3 python -m scripts.rl --pool_capacity 20                # 正式：论文默认配置，steps 按容量自动选（20→250000）
+   CUDA_VISIBLE_DEVICES="" python -m scripts.rl --pool_capacity 10 --steps 5000   # 先冒烟：小规模，看看 CPU 上跑多快
+   CUDA_VISIBLE_DEVICES="" python -m scripts.rl --pool_capacity 20                 # 正式：论文默认配置，steps 按容量自动选（20→250000）
    ```
 
    `pool_capacity`（因子池容量）、`instruments`（默认 `csi300`）、`steps`（不填按
    `{10:200000, 20:250000, 50:300000, 100:350000}` 自动选）是最常改的几个参数。
-   如果哪台机器根本没 GPU 才需要改代码，把 `cuda:0` 改成
-   `"cuda:0" if torch.cuda.is_available() else "cpu"`。
+   **建议先跑冒烟档计个时**，纯 CPU 下 250000+ 步的正式档可能要跑较久，心里有个数
+   再决定要不要缩小 `steps` 或等 GPU。
 
 4. **产出**：`out/results/<instruments>_<pool_capacity>_<seed>_<timestamp>_rl/` 下每隔
    一段步数存一次 `{step}_steps_pool.json`（因子池表达式 + 权重，`{"exprs": [...],
