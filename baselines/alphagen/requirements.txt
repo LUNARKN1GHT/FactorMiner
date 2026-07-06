@@ -3,7 +3,10 @@ gym==0.26.2
 matplotlib==3.3.4
 numpy==1.21.6
 pandas==1.2.4
-pyqlib
+pyqlib==0.9.0  # 锁 0.9.0（2022-12，跟 AlphaGen 仓库同时代）而不用最新版（0.9.7，2025-08）——
+               # 最新版编译的 Cython 扩展（如 _libs/rolling）ABI 对齐的是新版 numpy，跟我们
+               # 特意锁的 numpy==1.21.6 不兼容会崩（ImportError: numpy.core.multiarray failed
+               # to import）；老版本编译时用的 numpy 也老，天然兼容
 sb3_contrib==2.0.0
 stable_baselines3==2.0.0
 torch==2.0.1

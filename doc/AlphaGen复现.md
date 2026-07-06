@@ -130,3 +130,15 @@ python scripts/bridge_alphagen.py path/to/xxx_steps_pool.json configs/default.ya
 - 部分 AlphaGen 算子（尤其 Skew/Kurt/WMA/EMA/Cov 这类本项目没有的）会拉低桥接覆盖率，
   这是预期内的信息损失，覆盖率本身也是一个值得在论文里报告的数字。
 - `run scripts as modules`（`python -m scripts.rl`）是仓库自己的要求，不是 `python scripts/rl.py`。
+- **`qlib` 官方数据源（Azure blob）当前公开访问被禁**（GitHub 上有多个 issue 在报告 409
+  "Public access is not permitted"），但 `fetch_baostock_data.py` 的 `qlib_base_data_path`
+  只在一处用作可选的种子数据源，主路径是 baostock 自己的 `bs.query_all_stock()`——建一个空的
+  `{save_path}/a_shares_list.txt` 缓存文件即可绕开这个分支，不需要解决 qlib 官方数据源。
+- **`pyqlib` 装最新版（0.9.7）会在 `qlib.init()` 时崩**：
+  `ImportError: numpy.core.multiarray failed to import`，报错栈指到 `_libs/rolling`（Cython
+  编译的加速模块）。根因是二进制 ABI 不匹配——0.9.7（2025-08 发布）编译时链接的是新版 numpy
+  C-API，numpy 的 C-API 只保证"向前兼容"（老版本编译的扩展能在新 numpy 下跑），不保证反过来；
+  我们环境里特意锁的 `numpy==1.21.6`（比 0.9.7 编译时的 numpy 老很多）装不上。
+  **修法：锁 `pyqlib==0.9.0`**（2022-12 发布，跟 AlphaGen 仓库同时代，编译时用的 numpy 也老，
+  跟 1.21.6 天然兼容）。已改进 `requirements.txt`；服务器上 `pip install pyqlib==0.9.0` 重装
+  （建议先 `pip uninstall -y pyqlib` 干净卸载再装，避免残留旧编译产物）。

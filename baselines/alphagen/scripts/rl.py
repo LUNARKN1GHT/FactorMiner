@@ -167,7 +167,10 @@ def run_single_experiment(
     llm_replace_n: int = 3
 ):
     reseed_everything(seed)
-    initialize_qlib("~/.qlib/qlib_data/cn_data")
+    initialize_qlib("~/.qlib/qlib_data/cn_data_2024h1")  # 跟 fetch_baostock_data.py 的
+                                                          # qlib_export_path 对齐，那才是真
+                                                          # 实数据落盘的地方，不是官方元数据
+                                                          # 那个（本来就是空的、已绕开）
 
     llm_replace_n = 0 if not use_llm else llm_replace_n
     print(f"""[Main] Starting training process
