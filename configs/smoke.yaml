@@ -23,6 +23,25 @@ rl:                    # 强化学习挖因子·冒烟（小批跑通用）
   topk: 0
   n_jobs: 10
 
+quantfactor:            # QuantFactor REINFORCE 复现·冒烟（小批跑通用）
+  seed: 42
+  iters: 20
+  batch: 8              # 每轮采样轨迹数；每条还配一条贪婪轨迹，实际 rollout = 2×batch
+  lr: 0.001
+  entropy: 0.01
+  max_len: 10           # 跟 rl: 段一致
+  pool_capacity: 5      # 因子池容量缩小，加速每次入池重拟合
+  pool_lr: 0.05
+  pool_gd_steps: 50     # 每次候选入池重新拟合的梯度下降步数，从 200 缩到 50 提速
+  ir_alpha: 180000       # IR 阈值调度参数原样不动——这是算法行为，不是"跑多少"的旋钮，
+  ir_eta: 0.000001       # 冒烟规模下阈值不会真正抬起来，跟 gp 冒烟不指望收敛是同一个道理，
+  ir_delta: 0.3          # 只验证代码路径跑通，不验证 IR 惩罚分支的实际效果
+  ir_lambda: 0.02
+  train_start: "2021-01-01"
+  train_end: "2023-01-01"
+  topk: 0
+  n_jobs: 10
+
 data:
   clean_path: "data/cache/prices_clean.parquet"
 
