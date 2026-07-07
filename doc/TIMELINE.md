@@ -1,5 +1,21 @@
 # TIMELINE
 
+## 2026-07-07
+
+- **AlphaGen 复现路线转折：放弃 qlib/baostock，改喂本项目自己的 tushare 数据**。服务器上
+  qlib/baostock 数据链路连续踩坑（baostock 私有协议端口 10030 被计算节点防火墙挡死、qlib
+  官方数据源 Azure blob 被禁 409、PyPI 上叫"qlib"的其实是 2018 年无关废弃包、真正的
+  `pyqlib` 装最新版又跟锁定的老 numpy ABI 不兼容），其中网络层的坑无法通过改代码绕开。
+  改路线：`Expression.evaluate()` 只依赖鸭子类型接口不依赖真 qlib，新增
+  `alphagen_generic/tushare_data.py::TushareStockData` 顶替官方 `StockData`，直接从
+  `data/cache/prices_clean.parquet` 构造；`scripts/rl.py` 训练/测试 segments 改成跟本项目
+  GP/RL/LLM/QuantFactor 同一套 train_start=2021-01-01 起始约定。本机合成数据把整条链路
+  （PPO 训练+因子池+checkpoint 落盘）跑通、退出码 0。不再有独立的"官方 CSI300 口径"，全部
+  跟本项目其他生成器同一份数据、天然可比；`scripts/bridge_alphagen.py` 桥接脚本仍需要跑
+  （AlphaGen 落盘的还是它自己的表达式语法，需转成本项目 `Node` 才能进
+  `compare_generators.py`）。详细踩坑记录与依赖变化表见
+  [AlphaGen复现.md](./AlphaGen复现.md)。
+
 ## 2026-07-04
 
 - **mentor 新方向：文献复现 → 论文起点**。mentor 要求先调研现有因子挖掘方法、挑几个复现，

@@ -17,8 +17,8 @@ from alphagen.rl.env.wrapper import AlphaEnv
 from alphagen.rl.policy import LSTMSharedNet
 from alphagen.utils import reseed_everything, get_logger
 from alphagen.rl.env.core import AlphaEnvCore
-from alphagen_qlib.calculator import QLibStockDataCalculator
-from alphagen_qlib.stock_data import initialize_qlib
+from alphagen_generic.tushare_data import TushareStockData
+from alphagen_generic.tushare_calculator import TushareStockDataCalculator
 from alphagen_llm.client import ChatClient, OpenAIClient, ChatConfig
 from alphagen_llm.prompts.system_prompt import EXPLAIN_WITH_TEXT_DESC
 from alphagen_llm.prompts.interaction import InterativeSession, DefaultInteraction
@@ -63,7 +63,7 @@ class CustomCallback(BaseCallback):
     def __init__(
         self,
         save_path: str,
-        test_calculators: List[QLibStockDataCalculator],
+        test_calculators: List[TushareStockDataCalculator],
         verbose: int = 0,
         chat_session: Optional[InterativeSession] = None,
         llm_every_n_steps: int = 25_000,
@@ -167,10 +167,9 @@ def run_single_experiment(
     llm_replace_n: int = 3
 ):
     reseed_everything(seed)
-    initialize_qlib("~/.qlib/qlib_data/cn_data_2024h1")  # 跟 fetch_baostock_data.py 的
-                                                          # qlib_export_path 对齐，那才是真
-                                                          # 实数据落盘的地方，不是官方元数据
-                                                          # 那个（本来就是空的、已绕开）
+    # 不再 initialize_qlib()：baostock 私有协议端口(10030)被计算节点防火墙挡死、
+    # qlib 官方数据源(Azure blob)也被禁，整条 qlib/baostock 数据链路走不通。
+    # 见 alphagen_generic/tushare_data.py：直接用本项目自己的数据，不需要 qlib。
 
     llm_replace_n = 0 if not use_llm else llm_replace_n
     print(f"""[Main] Starting training process
@@ -198,22 +197,26 @@ def run_single_experiment(
     close = Feature(FeatureType.CLOSE)
     target = Ref(close, -20) / close - 1
 
-    def get_dataset(start: str, end: str) -> StockData:
-        return StockData(
-            instrument=instruments,
+    def get_dataset(start: str, end: str) -> TushareStockData:
+        # baostock 网络连不通、qlib 官方源也被禁，改用本项目自己的 tushare/hs300 数据
+        # （TushareStockData 鸭子类型顶替 qlib 的 StockData，见该模块文件头注释）。
+        # instruments 参数不再使用——universe 已经在 prices_clean.parquet 生成时定死是 hs300。
+        return TushareStockData(
             start_time=start,
             end_time=end,
             device=device
         )
 
     segments = [
-        ("2012-01-01", "2021-12-31"),
-        ("2022-01-01", "2022-06-30"),
-        ("2022-07-01", "2022-12-31"),
-        ("2023-01-01", "2023-06-30")
+        ("2021-01-01", "2022-12-31"),  # 训练段：跟本项目 GP/RL/LLM/QuantFactor 的
+                                        # train_start/train_end 对齐，也避开 regime 断点
+                                        # （doc/regime断点.md：2020→2021 有断点，训练不能骑上去）
+        ("2023-01-01", "2023-06-30"),
+        ("2023-07-01", "2023-12-31"),  # 原仓库切到 2023-06-30 为止，这里按本项目数据实际
+                                        # 覆盖到的 2023-12-31（configs/default.yaml data.end_date）
     ]
     datasets = [get_dataset(*s) for s in segments]
-    calculators = [QLibStockDataCalculator(d, target) for d in datasets]
+    calculators = [TushareStockDataCalculator(d, target) for d in datasets]
 
     def build_pool(exprs: List[Expression]) -> LinearAlphaPool:
         pool = MseAlphaPool(

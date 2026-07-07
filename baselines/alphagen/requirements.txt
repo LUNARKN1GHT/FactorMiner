@@ -14,3 +14,5 @@ shimmy==1.1.0
 fire
 openai==1.2.3
 num2words
+pyarrow  # 新增：alphagen_generic/tushare_data.py 读本项目 prices_clean.parquet 要用
+tensorboard  # sb3_contrib 的 MaskablePPO 训练日志要用，官方 requirements.txt 漏列了
