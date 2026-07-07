@@ -35,6 +35,22 @@
 （`TushareStockData` 构造 → `Expression.evaluate` → `TensorAlphaCalculator` 算 IC →
 `AlphaEnv`/`MaskablePPO` 训练 → 因子池/checkpoint 落盘）跑通、退出码 0，pool 表达式、
 IC 指标都正常输出。服务器上应该可以直接复用这条路径，完全不需要再碰 qlib/baostock。
+服务器实测（冒烟档 `--pool_capacity 10 --steps 5000`）也已跑通，真实 IC 在 0.08~0.16
+区间、随迭代抬升，跟别的生成器数量级一致，看起来合理。
+
+**只动了数据接入，没动论文的核心算法**：改的是 `get_dataset()`（数据从哪来）、
+`segments`（训练/测试时间段对齐本项目约定）、删掉 `initialize_qlib()`，PPO 训练循环、
+奖励定义（组合 IC）、因子池维护/线性组合逻辑（`MseAlphaPool`/`LinearAlphaPool`）、
+LSTM 策略网络（`LSTMSharedNet`）这些论文的核心贡献一行没改，官方仓库代码原样跑，只是把
+它的数据源从 qlib 换成了鸭子类型兼容的本项目数据。
+
+**接入本项目日志约定**：`scripts/rl.py` 现在也会调用 `src/utils/logger.py` 的
+`setup_experiment_logger`/`log_generation`（纯 stdlib 实现，不碰 numpy/pandas，可以放心
+跨 conda 环境导入），在 `results/logs/exp_..._alphagen/` 下生成 `meta.json`（超参+git
+commit）、`run.log`（训练开始/结束摘要）、`stats.jsonl`（每个 rollout 一行：pool
+size/best_ic/test IC 等），格式跟 GP/RL/LLM/QuantFactor 一致，方便以后统一回看。这跟
+AlphaGen 自己的 `out/results/`（checkpoint+pool json）、`out/tensorboard/`（训练曲线）
+是并存关系，不是替代——那两处还在原来的位置。
 
 ## 服务器上跑（新路线，不需要 qlib/baostock）
 

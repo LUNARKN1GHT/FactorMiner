@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from typing import Optional, Tuple, List
 from datetime import datetime
 from pathlib import Path
@@ -9,6 +10,12 @@ import fire
 import numpy as np
 from sb3_contrib.ppo_mask import MaskablePPO
 from stable_baselines3.common.callbacks import BaseCallback
+
+# 接入本项目自己的实验日志（results/logs/exp_..._alphagen/run.log+stats.jsonl），
+# 跟 GP/RL/LLM/QuantFactor 用同一套记录方式，方便以后回看。src/utils/logger.py
+# 是纯 stdlib 实现（json/logging/subprocess），不碰 numpy/pandas，可以放心跨环境导入。
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+from src.utils.logger import setup_experiment_logger, log_generation
 
 from alphagen.data.expression import *
 from alphagen.data.parser import ExpressionParser
@@ -67,11 +74,13 @@ class CustomCallback(BaseCallback):
         verbose: int = 0,
         chat_session: Optional[InterativeSession] = None,
         llm_every_n_steps: int = 25_000,
-        drop_rl_n: int = 5
+        drop_rl_n: int = 5,
+        log_dir: Optional[Path] = None
     ):
         super().__init__(verbose)
         self.save_path = save_path
         self.test_calculators = test_calculators
+        self.log_dir = log_dir
         os.makedirs(self.save_path, exist_ok=True)
 
         self.llm_use_count = 0
@@ -102,6 +111,26 @@ class CustomCallback(BaseCallback):
             self.logger.record(f'test/rank_ic_{i}', rank_ic_test)
         self.logger.record(f'test/ic_mean', ic_test_mean)
         self.logger.record(f'test/rank_ic_mean', rank_ic_test_mean)
+        if self.log_dir is not None:
+            state = self.pool.state
+            if self.pool.size:
+                best_idx = int(np.argmax(np.abs(state['weights'][:self.pool.size])))
+                best_expr_str = str(state['exprs'][best_idx])
+            else:
+                best_expr_str = ""
+            log_generation(
+                self.log_dir,
+                gen=self.num_timesteps,
+                best_ic=self.pool.best_ic_ret,
+                mean_ic=ic_test_mean,
+                best_expr=best_expr_str,
+                extra={
+                    "pool_size": self.pool.size,
+                    "significant": int((np.abs(self.pool.weights[:self.pool.size]) > 1e-4).sum()),
+                    "rank_ic_test_mean": rank_ic_test_mean,
+                    "eval_cnt": self.pool.eval_cnt,
+                },
+            )
         self.save_checkpoint()
 
     def save_checkpoint(self):
@@ -172,16 +201,6 @@ def run_single_experiment(
     # 见 alphagen_generic/tushare_data.py：直接用本项目自己的数据，不需要 qlib。
 
     llm_replace_n = 0 if not use_llm else llm_replace_n
-    print(f"""[Main] Starting training process
-    Seed: {seed}
-    Instruments: {instruments}
-    Pool capacity: {pool_capacity}
-    Total Iteration Steps: {steps}
-    AlphaGPT-Like Init-Only LLM Usage: {alphagpt_init}
-    Use LLM: {use_llm}
-    Invoke LLM every N steps: {llm_every_n_steps}
-    Replace N alphas with LLM: {llm_replace_n}
-    Drop N alphas before LLM: {drop_rl_n}""")
 
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     # tag = "rlv2" if llm_add_subexpr == 0 else f"afs{llm_add_subexpr}aar1-5"
@@ -192,6 +211,24 @@ def run_single_experiment(
     name_prefix = f"{instruments}_{pool_capacity}_{seed}_{timestamp}_{tag}"
     save_path = os.path.join("./out/results", name_prefix)
     os.makedirs(save_path, exist_ok=True)
+
+    # 接入本项目自己的实验日志约定（跟 GP/RL/LLM/QuantFactor 一致），跟 AlphaGen 自己的
+    # out/results/<name_prefix>/（checkpoint+pool json）、out/tensorboard/（曲线）并存，
+    # 不是替代关系——那两处继续留着，这里只是多一份人类可读、机器可 load 的记录。
+    logger, log_dir = setup_experiment_logger(
+        tag="alphagen",
+        meta={
+            "seed": seed, "instruments": instruments, "pool_capacity": pool_capacity,
+            "steps": steps, "alphagpt_init": alphagpt_init, "use_llm": use_llm,
+            "name_prefix": name_prefix,
+        },
+    )
+    logger.info(
+        "AlphaGen 训练启动 | seed=%d instruments=%s pool_capacity=%d steps=%d "
+        "alphagpt_init=%s use_llm=%s llm_every_n_steps=%d replace_n=%d drop_rl_n=%d",
+        seed, instruments, pool_capacity, steps, alphagpt_init, use_llm,
+        llm_every_n_steps, llm_replace_n, drop_rl_n,
+    )
 
     device = torch.device("cpu")
     close = Feature(FeatureType.CLOSE)
@@ -253,7 +290,8 @@ def run_single_experiment(
         verbose=1,
         chat_session=inter,
         llm_every_n_steps=llm_every_n_steps,
-        drop_rl_n=drop_rl_n
+        drop_rl_n=drop_rl_n,
+        log_dir=log_dir
     )
     model = MaskablePPO(
         "MlpPolicy",
@@ -278,6 +316,11 @@ def run_single_experiment(
         total_timesteps=steps,
         callback=checkpoint_callback,
         tb_log_name=name_prefix,
+    )
+    logger.info(
+        "AlphaGen 训练结束 | best_ic_ret=%.4f pool_size=%d eval_cnt=%d | 落盘目录=%s",
+        checkpoint_callback.pool.best_ic_ret, checkpoint_callback.pool.size,
+        checkpoint_callback.pool.eval_cnt, save_path,
     )
 
 
