@@ -150,3 +150,16 @@ pool json 后才有意义。
   警告，不是真的报错，可以忽略。
 - `run scripts as modules`（`python -m scripts.rl`）是仓库自己的要求，不是
   `python scripts/rl.py`。
+- **官方仓库自己的动作掩码（action mask）有个边界 bug，训练量大了偶尔会崩**：
+  `alphagen/rl/env/wrapper.py::action_masks()` 和 `alphagen/data/tree.py::ExpressionBuilder`
+  在某些状态下对"当前能选哪些 token"判断不一致，导致 RL 策略偶尔选到一个实际非法的算子
+  token（服务器实测撞到过一次：栈里只有一个裸常量 `[30.0]` 时选中了 `Min`，这在
+  `ExpressionBuilder.validate_op` 里是不合法的——`RollingOperator` 需要 2 个栈元素），
+  `ExpressionBuilder.add_token` 检测到后抛 `InvalidExpressionException`，没人接住，整个
+  训练进程崩溃。没有深挖 mask 逻辑本身的根因（这是官方仓库的代码，不是我们这次复现改动的
+  范围），改成**防御性兜底**：`alphagen/rl/env/core.py::AlphaEnvCore.step()` 里
+  `add_token` 现在包一层 try/except，抓到 `InvalidExpressionException` 就按"本回合表达式
+  非法"处理（reward=-1，回合结束），这跟仓库自己在 `MAX_EXPR_LENGTH` 截断时对非法表达式的
+  处理方式完全一致——**只是让偶发边界 case 不再打断长跑，合法路径的行为一点没变**。本机
+  8000 步冒烟没有再复现这个崩溃（没触发说明这条边界本来就少见，不代表百分百根除，但至少
+  不会再让整个训练崩掉，遇到了就是白费这一个回合）。

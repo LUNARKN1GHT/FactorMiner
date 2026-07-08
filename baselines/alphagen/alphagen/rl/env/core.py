@@ -3,6 +3,7 @@ import gymnasium as gym
 import math
 
 from alphagen.config import MAX_EXPR_LENGTH
+from alphagen.data.exception import InvalidExpressionException
 from alphagen.data.tokens import *
 from alphagen.data.expression import *
 from alphagen.data.tree import ExpressionBuilder
@@ -52,9 +53,18 @@ class AlphaEnvCore(gym.Env):
             done = True
         elif len(self._tokens) < MAX_EXPR_LENGTH:
             self._tokens.append(action)
-            self._builder.add_token(action)
-            done = False
-            reward = 0.0
+            try:
+                self._builder.add_token(action)
+                done = False
+                reward = 0.0
+            except InvalidExpressionException:
+                # 动作掩码（action_masks，见 wrapper.py）跟 ExpressionBuilder.validate() 之间
+                # 存在没查清根因的边界不一致，长跑偶尔会选到实际非法的 token 导致这里抛异常，
+                # 崩掉整个训练进程。这里防御性兜底：当成本回合失败（跟 MAX_EXPR_LENGTH 时
+                # is_valid()==False 的处理方式一致，reward=-1），不让偶发边界 case 打断长跑，
+                # 不改变合法路径下的任何行为。
+                done = True
+                reward = -1.
         else:
             done = True
             reward = self._evaluate() if self._builder.is_valid() else -1.
