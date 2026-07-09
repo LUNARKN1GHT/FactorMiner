@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import pickle
+from pathlib import Path
 
 import pandas as pd
 import yaml
@@ -26,6 +27,31 @@ from src.data.preprocess import to_panel
 from src.evaluation.metrics import calc_ic_series
 from src.rl.alphagen_bridge import translate_pool
 from src.utils.logger import setup_experiment_logger
+
+_LOG_ROOT = Path(__file__).resolve().parents[1] / "results" / "logs"
+
+
+def _find_true_n_explored(pool_json_path: str) -> int | None:
+    """`{step}_steps_pool.json` 只是训练结束时的因子池快照（size=pool_capacity，比如 20），
+    不是训练过程中真正试过的候选数——deflated 门槛要用真正试验数才有意义。真正的试验数
+    (eval_cnt) 记在 `scripts/rl.py` 训练时写的 `results/logs/exp_..._alphagen/stats.jsonl`
+    里，跟这次桥接是两个不同的 exp 目录，靠 pool json 所在目录名（= name_prefix，
+    `scripts/rl.py::run_single_experiment` 里两边都用这个串）配对找回去。找不到就返回
+    None，调用方兜底退回 len(exprs)（并明确 warning，不能悄悄用错误数字）。"""
+    name_prefix = Path(pool_json_path).resolve().parent.name
+    for meta_path in _LOG_ROOT.glob("*_alphagen/meta.json"):
+        with open(meta_path, encoding="utf-8") as f:
+            meta = json.load(f)
+        if meta.get("name_prefix") != name_prefix:
+            continue
+        stats_path = meta_path.parent / "stats.jsonl"
+        if not stats_path.exists():
+            continue
+        lines = stats_path.read_text(encoding="utf-8").splitlines()
+        if not lines:
+            continue
+        return json.loads(lines[-1]).get("eval_cnt")
+    return None
 
 
 def main() -> None:
@@ -47,6 +73,19 @@ def main() -> None:
     )
     for expr, reason in failed:
         logger.info("跳过：%s | 原因：%s", expr, reason)
+
+    n_explored = _find_true_n_explored(args.pool_json)
+    if n_explored is None:
+        n_explored = len(exprs)
+        logger.warning(
+            "没找到训练时的 stats.jsonl（配对失败），n_explored 退化成因子池大小 %d——"
+            "这个数字严重低估真实试验数，deflated 门槛会算得偏松，不能直接拿去跟 "
+            "GP/RL/LLM/QuantFactor 比较，建议查一下 results/logs/*_alphagen/meta.json 里的 "
+            "name_prefix 对不对得上",
+            n_explored,
+        )
+    else:
+        logger.info("n_explored 取训练时真实试验数（eval_cnt）：%d", n_explored)
 
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
@@ -81,7 +120,7 @@ def main() -> None:
             {
                 "config_path": args.config,
                 "split": str(train_end),
-                "n_explored": len(exprs),  # 官方池子的真实候选数（含翻译失败的）
+                "n_explored": n_explored,
                 "factors": records,
             },
             fh,
