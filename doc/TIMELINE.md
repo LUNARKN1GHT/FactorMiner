@@ -1,5 +1,26 @@
 # TIMELINE
 
+## 2026-07-09
+
+- **AlphaGen 正式档（pool_capacity=20, steps=250000）在服务器跑通，11 小时**：
+  `InvalidExpressionException` 防御补丁扛住了全程（`eval_cnt` 到 19123，没崩）。结果：
+  train pool IC 单调爬到 0.186，OOS test IC 全程在 0.05~0.12 徘徊、末期还比中期略降
+  （0.064→0.054）——train/test 分道扬镳，是很干净的过拟合信号，跟 GP/RL/LLM 三个自研
+  生成器已经实锤的"纯量价搜索撞 amount 天花板"结论一致，这次是拿论文原版算法印证的
+  第四份独立证据。
+- **`bridge_alphagen.py` 首次真实桥接：覆盖率 0/20**——因子池里数值常量、
+  Greater/Sum/Med/Mad 这几个到处出现，本项目 `operators.py`/`Node` 体系原来都不支持，
+  一个都翻译不了。补齐：① `src/core/tree.py`/`evaluator.py` 加数值常量叶子节点支持
+  （`Node(value=<float>)` 广播成常数宽表）；② `src/core/operators.py` 新增
+  greater/less/ts_sum/ts_median/ts_var/ts_mad/ts_cov 七个算子（**这是 GP/RL/LLM 共用的
+  核心算子表，词表一并变大，不只是修桥接**）；③ `$vwap` 翻译成 `div(amount, volume)`
+  组合表达式而不是判不可翻译。用真实池子里失败的 11 条表达式复测：0/11 → 9/11（只剩
+  WMA/EMA 两个依然不支持，`Sign` 是本项目之前专门删掉的 reward-hacking 温床，刻意不
+  重新引入）。顺手修了 `alphagen_bridge.py` 自测里一处过时断言（`Node.__str__` 不显示
+  时序窗口是已知问题，2026-07-04 记过，这次只改测试期望值对齐现状，没有动 `__str__`
+  本身——那是更大范围的 dedup key 决定，留给后续）。详见
+  [AlphaGen复现.md](./AlphaGen复现.md)。
+
 ## 2026-07-07
 
 - **AlphaGen 复现路线转折：放弃 qlib/baostock，改喂本项目自己的 tushare 数据**。服务器上

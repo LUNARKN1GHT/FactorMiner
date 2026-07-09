@@ -1,4 +1,8 @@
-"""GP 算子定义：用于构建因子表达式的基本运算。"""
+"""因子表达式算子定义：GP/RL/LLM/AlphaGen 桥接共用的算子注册表（`src/core` 是中立核，
+见 `doc/顶层设计.md`）。2026-07-09 为了让 AlphaGen 桥接（`src/rl/alphagen_bridge.py`）覆盖率
+从 0% 提上来，新增了 greater/less/ts_sum/ts_median/ts_var/ts_mad/ts_cov 这几个 AlphaGen
+有而本项目原来没有的算子——**注册在这里意味着 GP/RL/LLM 的搜索空间也会一并变大**，不是只
+影响桥接，如果要跟改动前的历史结果比较需要注意这一点。"""
 
 import numpy as np
 import pandas as pd
@@ -23,6 +27,16 @@ def protected_div(x: pd.DataFrame, y: pd.DataFrame) -> pd.DataFrame:
     out = x / y
     # 把 ±inf 替换成 0；真正的 NaN（停牌/缺失）保留，交给后面 IC 计算时过滤
     return out.replace([np.inf, -np.inf], 0.0)
+
+
+def greater(x: pd.DataFrame, y: pd.DataFrame) -> pd.DataFrame:
+    """逐元素取较大值（AlphaGen 的 Greater，对齐语义，非截面/时序算子）"""
+    return np.maximum(x, y)
+
+
+def less(x: pd.DataFrame, y: pd.DataFrame) -> pd.DataFrame:
+    """逐元素取较小值（AlphaGen 的 Less）"""
+    return np.minimum(x, y)
 
 
 # ---- 一元算子 ----
@@ -116,6 +130,32 @@ def decay_linear(x: pd.DataFrame, window: int) -> pd.DataFrame:
     return out
 
 
+def ts_sum(x: pd.DataFrame, window: int) -> pd.DataFrame:
+    """滚动窗口求和（AlphaGen 的 Sum）"""
+    return x.rolling(window, min_periods=1).sum()
+
+
+def ts_median(x: pd.DataFrame, window: int) -> pd.DataFrame:
+    """滚动窗口中位数（AlphaGen 的 Med）"""
+    return x.rolling(window, min_periods=1).median()
+
+
+def ts_var(x: pd.DataFrame, window: int) -> pd.DataFrame:
+    """滚动窗口方差（AlphaGen 的 Var）"""
+    return x.rolling(window, min_periods=1).var().fillna(0)
+
+
+def ts_mad(x: pd.DataFrame, window: int) -> pd.DataFrame:
+    """滚动窗口平均绝对离差：跟 AlphaGen 的 Mad 对齐——每个窗口内减掉的是
+    「该窗口自己的均值」，不是外部另算的一条滚动均值序列，所以用 apply 而不是
+    两次独立 rolling 相减（那样会对错参照点）"""
+
+    def _mad(arr):
+        return np.mean(np.abs(arr - arr.mean()))
+
+    return x.rolling(window, min_periods=1).apply(_mad, raw=True)
+
+
 # ---- 时序二元算子 ----
 
 
@@ -125,6 +165,11 @@ def ts_corr(x: pd.DataFrame, y: pd.DataFrame, window: int) -> pd.DataFrame:
     return out.replace([np.inf, -np.inf], 0.0)
 
 
+def ts_cov(x: pd.DataFrame, y: pd.DataFrame, window: int) -> pd.DataFrame:
+    """两序列的滚动协方差（AlphaGen 的 Cov）"""
+    return x.rolling(window=window, min_periods=max(2, window // 2)).cov(y)
+
+
 # ---- 算子注册表 ----
 
 BINARY_OPS = {
@@ -132,6 +177,8 @@ BINARY_OPS = {
     "sub": (sub, 2),
     "mul": (mul, 2),
     "div": (protected_div, 2),
+    "greater": (greater, 2),
+    "less": (less, 2),
 }
 
 UNARY_OPS = {
@@ -152,6 +199,13 @@ TS_OPS = {
     "ts_min": (ts_min, 2),
     "ts_argmax": (ts_argmax, 2),
     "decay_linear": (decay_linear, 2),
+    "ts_sum": (ts_sum, 2),
+    "ts_median": (ts_median, 2),
+    "ts_var": (ts_var, 2),
+    "ts_mad": (ts_mad, 2),
 }
 
-TS_BINARY_OPS = {"ts_corr": (ts_corr, 3)}
+TS_BINARY_OPS = {
+    "ts_corr": (ts_corr, 3),
+    "ts_cov": (ts_cov, 3),
+}

@@ -110,15 +110,19 @@ AlphaGen 自己的 `out/results/`（checkpoint+pool json）、`out/tensorboard/`
 | Max/Min(x,Nd) | ts_max/ts_min(x,N) | 顺手核实：`ts_max` 之前有个 copy-paste bug（调用了 `.rolling().min()`），本次复现顺手修了（`src/core/operators.py`），影响所有历史生成器，不只是这次 |
 | Rank(x,Nd)（滚动分位数） | ts_rank(x,N) | |
 | Corr(x,y,Nd) | ts_corr(x,y,N) | |
-| Sign/Pow/Greater/Less/Sum/Var/Skew/Kurt/Med/Mad/WMA/EMA/Cov | — | 本项目 `operators.py` 没有对应算子，判不可翻译、跳过计数，不强行扩算子凑覆盖率 |
-| `$vwap` | — | 本项目宽表没有 vwap 字段（`TushareStockData` 里是 `amount/volume` 近似算出来喂给 AlphaGen 自己用的，不进本项目 `Node` 体系），同样跳过 |
-| 数值常量（如 `Add(x,5.0)`） | — | 本项目算子表没有常量叶子节点，跳过 |
+| Greater/Less | greater/less | 2026-07-09 补的：服务器首次真实桥接实测覆盖率是 **0/20**——数值常量和 Greater/Sum/Med/Mad 这几个到处出现，缺一个都会拖垮整条表达式。补上后不只是修复桥接，`src/core/operators.py` 是 GP/RL/LLM 共用的算子注册表，词表一并变大了 |
+| Sum/Med/Var/Mad(x,Nd) | ts_sum/ts_median/ts_var/ts_mad(x,N) | 同上；`ts_mad` 按 AlphaGen 语义实现（窗口内减掉窗口自己的均值，不是外部另算的滚动均值） |
+| Cov(x,y,Nd) | ts_cov(x,y,N) | 同上，仿 `ts_corr` 的写法 |
+| 数值常量（如 `Add(x,5.0)`） | `Node(value=<float>)` | 叶子节点存 float，`evaluator.py` 广播成常数宽表；原来判不可翻译是覆盖率归零的主因 |
+| `$vwap` | `div(amount, volume)` | 本项目宽表没有现成 vwap 字段，翻译成用 amount/volume 现算的组合表达式（标准近似），不是判不可翻译 |
+| Sign/Pow/Skew/Kurt/WMA/EMA | — | 依然不支持：`Sign` 是本项目之前专门删掉的 reward-hacking 温床（`doc/算子与数据.md`），不重新引入；`Pow` 负底数取非整数次方容易出 NaN；`Skew`/`Kurt`/`WMA`/`EMA` 优先级较低，暂不补 |
+
+用真实池子里翻译失败的 11 条表达式复测：加算子/常量/vwap 之前 0/11 可翻译，加完之后
+9/11（只有用到 WMA/EMA 那两条还跳），量级上应该能把整体覆盖率从 0% 拉到大部分可用。
 
 `python scripts/bridge_alphagen.py path/to/xxx_steps_pool.json configs/default.yaml`
 会打印翻译覆盖率、跳过原因，落盘 `factor_library.pkl`（同构 schema，tag `alphagen`），
 `n_explored` 记的是官方池子导出的候选总数（含翻译失败的，不为了让分母好看而剔除）。
-本机用假数据验证过这条链路逻辑无误；真实覆盖率、真实 IC 数字要等服务器产出真实
-pool json 后才有意义。
 
 ## 服务器踩坑记录（如实记录，最终绕开而非解决）
 

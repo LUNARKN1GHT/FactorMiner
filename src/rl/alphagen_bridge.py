@@ -7,10 +7,16 @@
 ``Mean($close,5d)``）解析成本项目的 `Node`，方便复用自己的
 `src/core/evaluator.py` 在自己的数据上重新评估、进而喂 `compare_generators.py`。
 
-算子映射：能一一对上的照搬。AlphaGen 有而本项目 `operators.py` 没有的算子
-（Sign/Pow/Greater/Less/Sum/Var/Skew/Kurt/Med/Mad/WMA/EMA/Cov），以及用到 ``$vwap``
-终端（本项目宽表没有 vwap 字段）或数值常量的表达式，一律判不可翻译并计数，不为了
-凑覆盖率强行扩算子——翻译不了是预期内的信息损失，如实报告覆盖率就好。
+算子映射：能一一对上的照搬。数值常量叶子（如 ``30.0``）翻译成 `Node(value=<float>)`，
+由 `src/core/evaluator.py` 广播成常数宽表求值——实测服务器真实因子池首次桥接时这类常量
+在几乎每条表达式里都出现，不支持的话覆盖率直接是 0，所以专门补上了（2026-07-09）。
+AlphaGen 有而本项目 `operators.py` 原来没有的 Greater/Less/Sum/Var/Med/Mad/Cov 也一并
+在 `src/core/operators.py` 补齐了实现（连带扩大了 GP/RL/LLM 的算子词表，不只是这里）。
+``$vwap`` 本项目宽表没有现成字段，但翻译成 `div(amount, volume)`（标准近似）而不是
+判不可翻译——本项目宽表本来就有 amount。
+剩下 Sign/Pow/Skew/Kurt/WMA/EMA 依然判不可翻译：`sign` 是本项目之前专门删掉的
+reward-hacking 温床（见 `doc/算子与数据.md`），不重新引入；`Pow` 负底数取非整数次方
+容易出 NaN、数值不稳，`Skew`/`Kurt`/`WMA`/`EMA` 优先级较低，暂不补，如实报告覆盖率。
 """
 
 from __future__ import annotations
@@ -22,7 +28,14 @@ from src.core.tree import Node
 _UNARY = {"Abs": "abs", "Log": "log", "CSRank": "rank"}
 """一元算子：AlphaGen 名 -> 本项目 operators.py 里的算子名"""
 
-_BINARY = {"Add": "add", "Sub": "sub", "Mul": "mul", "Div": "div"}
+_BINARY = {
+    "Add": "add",
+    "Sub": "sub",
+    "Mul": "mul",
+    "Div": "div",
+    "Greater": "greater",
+    "Less": "less",
+}
 """二元算子（非时序）：AlphaGen 名 -> 本项目算子名"""
 
 _TS_UNARY = {
@@ -33,19 +46,21 @@ _TS_UNARY = {
     "Max": "ts_max",
     "Min": "ts_min",
     "Rank": "ts_rank",
+    "Sum": "ts_sum",
+    "Med": "ts_median",
+    "Var": "ts_var",
+    "Mad": "ts_mad",
 }
 """时序一元算子（数据 + 窗口）：AlphaGen 的 RollingOperator -> 本项目 TS_OPS"""
 
-_TS_BINARY = {"Corr": "ts_corr"}
+_TS_BINARY = {"Corr": "ts_corr", "Cov": "ts_cov"}
 """时序二元算子（两个数据 + 窗口）：AlphaGen 的 PairRollingOperator -> 本项目 TS_BINARY_OPS"""
 
 _TERMINALS = {"open", "close", "high", "low", "volume"}
 """AlphaGen 终端里本项目宽表也有的字段；``vwap`` 本项目没有，遇到判不可翻译"""
 
-_UNSUPPORTED = {
-    "Sign", "Pow", "Greater", "Less", "Sum", "Var", "Skew", "Kurt", "Med", "Mad", "WMA", "EMA", "Cov",
-}
-"""AlphaGen 有、本项目 operators.py 没有对应实现的算子"""
+_UNSUPPORTED = {"Sign", "Pow", "Skew", "Kurt", "WMA", "EMA"}
+"""AlphaGen 有、本项目 operators.py 没有对应实现的算子（刻意不补，理由见模块 docstring）"""
 
 
 class UnsupportedExprError(ValueError):
@@ -83,7 +98,7 @@ def parse_alphagen_expr(expr: str) -> Node:
             ``Op(arg1,arg2)``、终端 ``$field``、时间增量 ``Nd``。
 
     Raises:
-        UnsupportedExprError: 用到了不在算子映射表内的算子 / 终端 / 数值常量。
+        UnsupportedExprError: 用到了不在算子映射表内的算子 / 终端。
 
     Returns:
         Node: 翻译后的表达式树，可直接喂 `src.core.evaluator.evaluate`。
@@ -91,14 +106,24 @@ def parse_alphagen_expr(expr: str) -> Node:
     expr = expr.strip()
     if expr.startswith("$"):
         field = expr[1:]
+        if field == "vwap":
+            # 本项目宽表没有现成的 vwap 字段，但有 amount（成交额）——vwap = amount/volume
+            # 是标准近似，翻译成 div(amount, volume) 组合表达式，不用改 to_wide()/新增终端
+            amount = Node(name="amount", arity=0, value="amount")
+            volume = Node(name="volume", arity=0, value="volume")
+            return Node(name="div", arity=2, children=[amount, volume])
         if field not in _TERMINALS:
             raise UnsupportedExprError(f"不支持的终端：${field}（本项目宽表无此字段）")
         return Node(name=field, arity=0, value=field)
 
     m = re.fullmatch(r"([A-Za-z]+)\((.*)\)", expr)
     if not m:
-        # 剩下的情形只有数值常量（如 "5.0"）——本项目算子表没有常量叶子节点
-        raise UnsupportedExprError(f"不支持的数值常量：{expr}")
+        # 剩下的情形是数值常量（如 "5.0"/"-0.5"）——叶子节点 value 存 float，
+        # 由 evaluator.py 广播成常数宽表；解析不出数字才是真的不支持
+        try:
+            return Node(name=None, arity=0, value=float(expr))
+        except ValueError:
+            raise UnsupportedExprError(f"无法解析的片段：{expr}") from None
 
     op, inner = m.group(1), m.group(2)
     args = _split_top_level_args(inner)
@@ -154,18 +179,32 @@ if __name__ == "__main__":
         "$close": "close",
         "Abs($close)": "abs(close)",
         "Add($open,$close)": "add(open, close)",
-        "Mean($close,5d)": "ts_mean(close, 5)",
-        "Ref($close,10d)": "delay(close, 10)",
-        "Max($high,20d)": "ts_max(high, 20)",
-        "Corr($close,$volume,10d)": "ts_corr(close, volume, 10)",
-        "Div(Mean($close,5d),CSRank($volume))": "div(ts_mean(close, 5), rank(volume))",
+        # 注意：Node.__str__ 目前不显示时序窗口（已知问题，doc/TIMELINE.md 2026-07-04 记过，
+        # 刻意没有一起改——那是影响 GP/RL/LLM 全项目 dedup key 的独立决定，今天只测算子/常量
+        # 翻译对不对，不测显示格式），所以期望串里窗口没有单独体现，靠 evaluate() 实际计算
+        # 时用 node.value 取窗口，跟显示字符串无关，不影响这里要测的翻译正确性。
+        "Mean($close,5d)": "ts_mean(close)",
+        "Ref($close,10d)": "delay(close)",
+        "Max($high,20d)": "ts_max(high)",
+        "Corr($close,$volume,10d)": "ts_corr(close, volume)",
+        "Div(Mean($close,5d),CSRank($volume))": "div(ts_mean(close), rank(volume))",
+        "30.0": "30.0",
+        "Add($close,30.0)": "add(close, 30.0)",
+        "Greater($close,$open)": "greater(close, open)",
+        "Less(-2.0,Mul($high,$close))": "less(-2.0, mul(high, close))",
+        "Sum($close,5d)": "ts_sum(close)",
+        "Med($close,10d)": "ts_median(close)",
+        "Var($close,10d)": "ts_var(close)",
+        "Mad($close,10d)": "ts_mad(close)",
+        "$vwap": "div(amount, volume)",
+        "Cov($close,$volume,10d)": "ts_cov(close, volume)",
     }
     for expr, want in cases_ok.items():
         got = str(parse_alphagen_expr(expr))
         assert got == want, f"{expr} -> {got}，期望 {want}"
         print(f"OK  {expr:<35} -> {got}")
 
-    cases_bad = ["$vwap", "Sign($close)", "5.0", "Cov($close,$volume,10d)"]
+    cases_bad = ["$unknown_field", "Sign($close)", "Pow($close,2.0)", "not_a_number"]
     for expr in cases_bad:
         try:
             parse_alphagen_expr(expr)
