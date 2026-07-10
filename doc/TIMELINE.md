@@ -1,5 +1,72 @@
 # TIMELINE
 
+## 2026-07-09
+
+- **AlphaGen 正式档（pool_capacity=20, steps=250000）在服务器跑通，11 小时**：
+  `InvalidExpressionException` 防御补丁扛住了全程（`eval_cnt` 到 19123，没崩）。结果：
+  train pool IC 单调爬到 0.186，OOS test IC 全程在 0.05~0.12 徘徊、末期还比中期略降
+  （0.064→0.054）——train/test 分道扬镳，是很干净的过拟合信号，跟 GP/RL/LLM 三个自研
+  生成器已经实锤的"纯量价搜索撞 amount 天花板"结论一致，这次是拿论文原版算法印证的
+  第四份独立证据。
+- **`bridge_alphagen.py` 首次真实桥接：覆盖率 0/20**——因子池里数值常量、
+  Greater/Sum/Med/Mad 这几个到处出现，本项目 `operators.py`/`Node` 体系原来都不支持，
+  一个都翻译不了。补齐：① `src/core/tree.py`/`evaluator.py` 加数值常量叶子节点支持
+  （`Node(value=<float>)` 广播成常数宽表）；② `src/core/operators.py` 新增
+  greater/less/ts_sum/ts_median/ts_var/ts_mad/ts_cov 七个算子（**这是 GP/RL/LLM 共用的
+  核心算子表，词表一并变大，不只是修桥接**）；③ `$vwap` 翻译成 `div(amount, volume)`
+  组合表达式而不是判不可翻译。用真实池子里失败的 11 条表达式复测：0/11 → 9/11（只剩
+  WMA/EMA 两个依然不支持，`Sign` 是本项目之前专门删掉的 reward-hacking 温床，刻意不
+  重新引入）。顺手修了 `alphagen_bridge.py` 自测里一处过时断言（`Node.__str__` 不显示
+  时序窗口是已知问题，2026-07-04 记过，这次只改测试期望值对齐现状，没有动 `__str__`
+  本身——那是更大范围的 dedup key 决定，留给后续）。详见
+  [AlphaGen复现.md](./AlphaGen复现.md)。
+
+## 2026-07-07
+
+- **AlphaGen 复现路线转折：放弃 qlib/baostock，改喂本项目自己的 tushare 数据**。服务器上
+  qlib/baostock 数据链路连续踩坑（baostock 私有协议端口 10030 被计算节点防火墙挡死、qlib
+  官方数据源 Azure blob 被禁 409、PyPI 上叫"qlib"的其实是 2018 年无关废弃包、真正的
+  `pyqlib` 装最新版又跟锁定的老 numpy ABI 不兼容），其中网络层的坑无法通过改代码绕开。
+  改路线：`Expression.evaluate()` 只依赖鸭子类型接口不依赖真 qlib，新增
+  `alphagen_generic/tushare_data.py::TushareStockData` 顶替官方 `StockData`，直接从
+  `data/cache/prices_clean.parquet` 构造；`scripts/rl.py` 训练/测试 segments 改成跟本项目
+  GP/RL/LLM/QuantFactor 同一套 train_start=2021-01-01 起始约定。本机合成数据把整条链路
+  （PPO 训练+因子池+checkpoint 落盘）跑通、退出码 0。不再有独立的"官方 CSI300 口径"，全部
+  跟本项目其他生成器同一份数据、天然可比；`scripts/bridge_alphagen.py` 桥接脚本仍需要跑
+  （AlphaGen 落盘的还是它自己的表达式语法，需转成本项目 `Node` 才能进
+  `compare_generators.py`）。详细踩坑记录与依赖变化表见
+  [AlphaGen复现.md](./AlphaGen复现.md)。
+
+## 2026-07-04
+
+- **mentor 新方向：文献复现 → 论文起点**。mentor 要求先调研现有因子挖掘方法、挑几个复现，
+  作为论文的起点，后续再谈改进。调研落地为两个**发表过的** RL 系 baseline，都跟自研 GP/RL/LLM
+  三生成器（见 [强化学习挖因子](./强化学习挖因子.md)、[LLM进化挖因子](./LLM进化挖因子.md)）放
+  一起横向对比，同时刻意排除新的 LLM 系论文（temperature 不可复现 + API 不确定性太大，不利于
+  "复现"这个目标）。
+- **QuantFactor REINFORCE（arXiv:2409.05144，无官方代码，照论文公式实现）**：新增
+  `src/rl/alpha_pool.py`（因子池，梯度下降拟合线性组合权重）、`src/rl/pool_env.py`（组合 IC +
+  IR 时变阈值塑形奖励）、`policy.py::greedy_rollout`（贪婪解码，供贪婪基线用）、
+  `scripts/run_quantfactor.py`（每 episode 双轨迹：采样+贪婪，advantage=两者 reward 差，不再用
+  batch 内归一化）。本机合成数据冒烟跑通，`compare_generators.py` 打通。笔记
+  [QuantFactorREINFORCE复现.md](./QuantFactorREINFORCE复现.md)。
+- **AlphaGen（KDD 2023，官方仓库 RL-MLDM/alphagen，走真跑代码路径）**：clone 到
+  `baselines/alphagen/`（不进 `src/`，外部产物不算生成器）。本机 macOS arm64 装官方
+  `requirements.txt` 踩坑——`numpy==1.20.1` 等老版本无 arm64 wheel + 新版 setuptools 缺
+  `pkg_resources`，装不上；放宽版本装出独立环境 `alphagen-repro`（仅本机验证代码/环境用，
+  服务器 Linux+CUDA 应直接用官方原始锁定版本）。新增 `src/rl/alphagen_bridge.py`（表达式字符串
+  →`Node` 翻译器，算子映射表 + 不可翻译判定）与 `scripts/bridge_alphagen.py`（因子池 json → 自己
+  数据重新算 IC → factor_library.pkl），假数据验证链路通。**真实训练数据在实验室服务器上，本次
+  只做到环境验证+桥接管线就绪，正式跑通与结果留给服务器**（README 写了跑法）。笔记
+  [AlphaGen复现.md](./AlphaGen复现.md)。
+- **顺手修的两个既有 bug**：① `src/core/operators.py::ts_max` 实际调用的是 `.rolling().min()`
+  （应为 `.max()`，copy-paste 遗留），影响所有历史生成器，已修。② 发现 `Node.__str__`
+  （`src/core/tree.py`）不显示时序窗口，会把不同窗口的因子（如 `ts_mean(close,5)` 和
+  `ts_mean(close,20)`）误判成同一个 dedup key——`src/llm/clean.py` 早前已踩过这个坑并修过
+  （`to_expr`），但 `train_rl.py`/`generate_factors.py` 目前仍是裸 `str(tree)`，同样风险仍在，
+  这次只在新写的 `pool_env.py` 里避坑（本地 `_to_expr`，不跨生成器 import），没有回头改旧代码，
+  如实记录、留给后续判断要不要修。
+
 ## 2026-06-17
 
 - **LLM 进化挖因子（操作员-评论家）= 第三个生成器**：沿 mentor「神经符号 / LLM 辅助生成」终点方向，继 GP/RL 后落地。新增 `src/llm/`：[`parser.py`](../src/llm/parser.py)（函数式文本→Node，按 core 算子注册表校验元数/窗口）、[`generate.py`](../src/llm/generate.py)（操作员 A，DeepSeek OpenAI 兼容接口，`call_llm`+`parse_response`+`generate_trees`）、[`clean.py`](../src/llm/clean.py)（清洗：算子数上限 + `canon_key` 跨轮去重 + `to_expr` 可解析渲染）、[`critic.py`](../src/llm/critic.py)（评论家 B，**只诊断不打分**）、[`prompts.py`](../src/llm/prompts.py)（`string.Template` 加载 `prompts/` 下三套提示词）、[`usage.py`](../src/llm/usage.py)（token/金额累加）。主循环 [`run_llm.py`](../scripts/run_llm.py)：A 生成→清洗→**只对新因子在 TRAIN 段求值**→archive（按 `|train_ic|−parsimony·size`）→B 诊断→回灌下一轮，patience 早停、全量 prompt/response 留痕、落 `factor_library` 同构 schema。

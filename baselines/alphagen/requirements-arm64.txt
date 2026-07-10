@@ -1,0 +1,17 @@
+# 官方 requirements.txt 在 Apple Silicon (arm64) 上的放宽版本。
+# numpy==1.20.1 / pandas==1.2.4 在 arm64 没有官方 wheel（那个年代 arm64 mac wheel 还没普及），
+# 装原始锁定版本会尝试源码编译、大概率失败或极慢。这里放宽到同大版本线内最早有 arm64 wheel
+# 的版本，其余保持官方锁定不动。实际生效版本以 `pip freeze` 为准，记入 doc/AlphaGen复现.md。
+baostock==0.8.8
+gym==0.26.2
+matplotlib>=3.5,<3.7
+numpy>=1.22,<1.24
+pandas>=1.4,<1.6
+qlib==0.0.2.dev20
+sb3_contrib==2.0.0
+stable_baselines3==2.0.0
+torch==2.0.1
+shimmy==1.1.0
+fire
+openai==1.2.3
+num2words

@@ -32,9 +32,14 @@ def evaluate(node: Node, wide: dict[str, pd.DataFrame]) -> pd.DataFrame:
     wide: to_wide() 产出的「字段 -> 宽表」字典
     返回：一张 date x code 的因子值宽表
     """
-    # 1. 叶子节点：直接返回对应字段的宽表
+    # 1. 叶子节点：字段名（str）直接查宽表；数值常量（int/float）广播成同形状常数宽表
+    #    （2026-07-09 为 AlphaGen 桥接加的——AlphaGen 表达式里数值常量随处可见，原来判
+    #    不可翻译直接跳过，导致桥接覆盖率是 0）
     if node.is_leaf:
-        return wide[node.value]
+        if isinstance(node.value, str):
+            return wide[node.value]
+        ref = next(iter(wide.values()))
+        return pd.DataFrame(node.value, index=ref.index, columns=ref.columns)
 
     fn = _FUNCS[node.name]  # type: ignore
 

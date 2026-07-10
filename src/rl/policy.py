@@ -94,6 +94,42 @@ def rollout(policy: FactorPolicy, env: FactorEnv, device: str) -> dict:
     return {"actions": actions, "masks": np.array(masks), "reward": reward, "info": info}
 
 
+@torch.no_grad()
+def greedy_rollout(policy: FactorPolicy, env: FactorEnv, device: str) -> dict:
+    """贪婪解码（每步取 argmax）生成一条完整因子序列，供 QuantFactor REINFORCE
+
+    的贪婪基线使用（论文 arXiv:2409.05144 式 10：baseline = 贪婪轨迹的 reward）。
+    结构与 :func:`rollout` 完全一致，只把 ``Categorical(...).sample()`` 换成
+    ``argmax``——同一策略网络，两条轨迹只差解码方式。
+
+    Args:
+        policy (FactorPolicy): 待推理的策略网络。
+        env (FactorEnv): 因子生成环境，提供合法动作掩码与奖励。
+        device (str): 张量所在设备。
+
+    Returns:
+        dict: 字段同 :func:`rollout` 的返回值。
+    """
+    env.reset()
+    h = None
+    prev = torch.full((1, 1), policy.bos, dtype=torch.long, device=device)
+    actions: list[int] = []
+    masks: list[np.ndarray] = []
+    done, reward, info = False, 0.0, {}  # type: ignore
+    while not done:
+        logits, h = policy(prev, h)  # (1,1,V)
+        m = env.legal_mask()
+        mt = torch.from_numpy(m).to(device).unsqueeze(0)  # (1,V)
+        logits = logits[:, -1].masked_fill(~mt, NEG_INF)  # (1,V)
+        a = torch.argmax(logits, dim=-1)
+        ai = int(a)
+        actions.append(ai)
+        masks.append(m)
+        _, reward, done, info = env.step(ai)
+        prev = a.view(1, 1)
+    return {"actions": actions, "masks": np.array(masks), "reward": reward, "info": info}
+
+
 def sequence_logprob_entropy(
     policy: FactorPolicy, actions: list[int], masks: np.ndarray, device: str
 ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -144,6 +180,11 @@ if __name__ == "__main__":
     policy = FactorPolicy(env.vocab_size).to(device)
     ep = rollout(policy, env, device)
     print("生成:", ep["info"].get("expr"), "| 奖励|IC| =", round(ep["reward"], 4))
+
+    g1 = greedy_rollout(policy, env, device)
+    g2 = greedy_rollout(policy, env, device)
+    assert g1["actions"] == g2["actions"], "greedy_rollout 在同一策略下必须确定性一致"
+    print("贪婪解码:", g1["info"].get("expr"), "| 奖励 =", round(g1["reward"], 4))
 
     lp, ent = sequence_logprob_entropy(policy, ep["actions"], ep["masks"], device)
     print("logprob =", round(float(lp), 3), "| entropy =", round(float(ent), 3))
